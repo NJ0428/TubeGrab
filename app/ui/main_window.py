@@ -1,14 +1,14 @@
 """
-TubeGrab – Main Application Window
+TubeGrab – Main Application Window (Phase 2)
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+from uuid import uuid4
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -27,6 +27,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.models.download_task import DownloadTask
+from app.models.video import VideoInfo
+from app.ui.components.download_item import DownloadItemWidget
+from app.ui.components.progress_card import ProgressCardWidget
+from app.ui.components.url_input import UrlInputWidget
+from app.ui.components.video_info import VideoInfoWidget
+from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
 
@@ -43,6 +50,8 @@ class MainWindow(QMainWindow):
         self._config = config or Config()
         self._config.load()
         self._current_theme: str = self._config.get("theme") or "dark"
+        self._video_info: VideoInfo | None = None
+        self._download_items: dict[str, DownloadItemWidget] = {}
 
         self._build_ui()
         self._connect_signals()
@@ -53,12 +62,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        """Assemble all widgets."""
         self.setWindowTitle("TubeGrab")
         self.setMinimumSize(900, 650)
         self.resize(1000, 720)
 
-        # ── Central widget ──────────────────────────────────────────
         central = QWidget()
         central.setObjectName("centralWidget")
         self.setCentralWidget(central)
@@ -67,10 +74,8 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # ── Top bar ─────────────────────────────────────────────────
         root_layout.addWidget(self._build_top_bar())
 
-        # ── Scrollable content area ─────────────────────────────────
         content_scroll = QScrollArea()
         content_scroll.setWidgetResizable(True)
         content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -84,27 +89,45 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(20, 16, 20, 16)
         content_layout.setSpacing(14)
 
-        # URL input section
-        content_layout.addWidget(self._build_url_section())
+        # URL input
+        url_card = QFrame()
+        url_card.setObjectName("card")
+        url_card_layout = QVBoxLayout(url_card)
+        url_card_layout.setContentsMargins(14, 12, 14, 12)
+        url_card_layout.setSpacing(8)
 
-        # Video info card (initially hidden)
-        self._info_card = self._build_info_card()
+        section_lbl = QLabel("VIDEO URL")
+        section_lbl.setObjectName("sectionLabel")
+        url_card_layout.addWidget(section_lbl)
+
+        self._url_input = UrlInputWidget()
+        url_card_layout.addWidget(self._url_input)
+        content_layout.addWidget(url_card)
+
+        # Video info
+        info_card = QFrame()
+        info_card.setObjectName("infoCard")
+        info_card_layout = QVBoxLayout(info_card)
+        info_card_layout.setContentsMargins(12, 10, 12, 10)
+        info_card_layout.setSpacing(0)
+
+        self._video_info_widget = VideoInfoWidget()
+        info_card_layout.addWidget(self._video_info_widget)
+        self._info_card = info_card
         self._info_card.setVisible(False)
         content_layout.addWidget(self._info_card)
 
         # Download options
         content_layout.addWidget(self._build_download_options())
 
-        # Separator
         sep = QFrame()
         sep.setObjectName("separator")
         sep.setFrameShape(QFrame.Shape.HLine)
         content_layout.addWidget(sep)
 
-        # Download list area
+        # Download list
         content_layout.addWidget(self._build_download_list())
 
-        # Push everything up
         content_layout.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         )
@@ -112,13 +135,14 @@ class MainWindow(QMainWindow):
         content_scroll.setWidget(content_widget)
         root_layout.addWidget(content_scroll, stretch=1)
 
-        # ── Status bar ──────────────────────────────────────────────
+        # Status bar with progress card
         self._status_bar = QStatusBar()
         self._status_bar.setObjectName("statusBar")
         self.setStatusBar(self._status_bar)
-        self._status_bar.showMessage("Ready")
 
-    # ── Top bar ────────────────────────────────────────────────────
+        self._progress_card = ProgressCardWidget()
+        self._status_bar.addPermanentWidget(self._progress_card)
+        self._status_bar.showMessage("Ready")
 
     def _build_top_bar(self) -> QWidget:
         top_bar = QWidget()
@@ -129,20 +153,18 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(20, 0, 16, 0)
         layout.setSpacing(10)
 
-        # Logo / app title
-        self._title_label = QLabel("TubeGrab")
-        self._title_label.setObjectName("appTitle")
+        title_lbl = QLabel("TubeGrab")
+        title_lbl.setObjectName("appTitle")
         font = QFont()
         font.setBold(True)
         font.setPointSize(16)
-        self._title_label.setFont(font)
+        title_lbl.setFont(font)
+        layout.addWidget(title_lbl)
 
-        layout.addWidget(self._title_label)
         layout.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        # Theme toggle button
         self._theme_btn = QPushButton("☀ Light")
         self._theme_btn.setObjectName("iconButton")
         self._theme_btn.setToolTip("Toggle light / dark theme")
@@ -150,7 +172,6 @@ class MainWindow(QMainWindow):
         self._theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._theme_btn)
 
-        # Settings button
         self._settings_btn = QPushButton("⚙ Settings")
         self._settings_btn.setObjectName("iconButton")
         self._settings_btn.setToolTip("Open settings")
@@ -159,93 +180,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._settings_btn)
 
         return top_bar
-
-    # ── URL section ────────────────────────────────────────────────
-
-    def _build_url_section(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("card")
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(8)
-
-        section_lbl = QLabel("VIDEO URL")
-        section_lbl.setObjectName("sectionLabel")
-        layout.addWidget(section_lbl)
-
-        row = QHBoxLayout()
-        row.setSpacing(8)
-
-        self._url_input = QLineEdit()
-        self._url_input.setObjectName("urlInput")
-        self._url_input.setPlaceholderText("Enter YouTube URL…")
-        self._url_input.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        row.addWidget(self._url_input)
-
-        self._paste_btn = QPushButton("Paste")
-        self._paste_btn.setObjectName("iconButton")
-        self._paste_btn.setToolTip("Paste URL from clipboard")
-        self._paste_btn.setFixedWidth(60)
-        self._paste_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        row.addWidget(self._paste_btn)
-
-        self._fetch_btn = QPushButton("Fetch Info")
-        self._fetch_btn.setObjectName("fetchButton")
-        self._fetch_btn.setToolTip("Fetch video information")
-        self._fetch_btn.setFixedWidth(100)
-        self._fetch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        row.addWidget(self._fetch_btn)
-
-        layout.addLayout(row)
-        return card
-
-    # ── Video info card ────────────────────────────────────────────
-
-    def _build_info_card(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("infoCard")
-
-        outer = QHBoxLayout(card)
-        outer.setContentsMargins(12, 10, 12, 10)
-        outer.setSpacing(14)
-
-        # Thumbnail
-        self._thumbnail_label = QLabel()
-        self._thumbnail_label.setObjectName("thumbnailLabel")
-        self._thumbnail_label.setFixedSize(160, 90)
-        self._thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._thumbnail_label.setText("No Image")
-        outer.addWidget(self._thumbnail_label)
-
-        # Metadata
-        meta_layout = QVBoxLayout()
-        meta_layout.setSpacing(4)
-        meta_layout.setContentsMargins(0, 0, 0, 0)
-
-        self._info_title_lbl = QLabel("Video Title")
-        self._info_title_lbl.setObjectName("infoTitle")
-        self._info_title_lbl.setWordWrap(True)
-        meta_layout.addWidget(self._info_title_lbl)
-
-        self._info_channel_lbl = QLabel("Channel Name")
-        self._info_channel_lbl.setObjectName("infoMeta")
-        meta_layout.addWidget(self._info_channel_lbl)
-
-        self._info_duration_lbl = QLabel("Duration: --:--")
-        self._info_duration_lbl.setObjectName("infoMeta")
-        meta_layout.addWidget(self._info_duration_lbl)
-
-        meta_layout.addSpacerItem(
-            QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
-        )
-        outer.addLayout(meta_layout, stretch=1)
-
-        return card
-
-    # ── Download options ───────────────────────────────────────────
 
     def _build_download_options(self) -> QFrame:
         card = QFrame()
@@ -259,7 +193,6 @@ class MainWindow(QMainWindow):
         section_lbl.setObjectName("sectionLabel")
         layout.addWidget(section_lbl)
 
-        # Row 1: resolution + format
         row1 = QHBoxLayout()
         row1.setSpacing(12)
 
@@ -296,7 +229,6 @@ class MainWindow(QMainWindow):
         )
         layout.addLayout(row1)
 
-        # Row 2: save path + browse
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
@@ -307,9 +239,7 @@ class MainWindow(QMainWindow):
         self._save_path_input = QLineEdit()
         self._save_path_input.setObjectName("savePathInput")
         self._save_path_input.setPlaceholderText("Select download folder…")
-        default_path = self._config.get("download_path") or str(
-            Path.home() / "Downloads"
-        )
+        default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
         self._save_path_input.setText(default_path)
         row2.addWidget(self._save_path_input)
 
@@ -322,9 +252,7 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(row2)
 
-        # Row 3: download button (centred)
         row3 = QHBoxLayout()
-        row3.setSpacing(0)
         row3.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
@@ -343,8 +271,6 @@ class MainWindow(QMainWindow):
 
         return card
 
-    # ── Download list ──────────────────────────────────────────────
-
     def _build_download_list(self) -> QWidget:
         container = QWidget()
         container.setObjectName("downloadListContainer")
@@ -360,12 +286,8 @@ class MainWindow(QMainWindow):
         self._download_scroll = QScrollArea()
         self._download_scroll.setObjectName("downloadScroll")
         self._download_scroll.setWidgetResizable(True)
-        self._download_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self._download_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
+        self._download_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._download_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._download_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._download_scroll.setMinimumHeight(160)
 
@@ -376,7 +298,6 @@ class MainWindow(QMainWindow):
         self._download_list_layout.setSpacing(4)
         self._download_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Placeholder when empty
         self._empty_lbl = QLabel("No downloads yet. Paste a URL above to get started.")
         self._empty_lbl.setObjectName("infoMeta")
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -392,10 +313,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _connect_signals(self) -> None:
-        self._paste_btn.clicked.connect(self._on_paste)
-        self._fetch_btn.clicked.connect(self._on_fetch_info)
+        self._url_input.fetch_requested.connect(self._on_fetch_requested)
         self._browse_btn.clicked.connect(self._on_browse)
-        self._download_btn.clicked.connect(self._on_download)
+        self._download_btn.clicked.connect(self._on_download_clicked)
         self._theme_btn.clicked.connect(self._on_toggle_theme)
         self._settings_btn.clicked.connect(self._on_settings)
 
@@ -403,32 +323,29 @@ class MainWindow(QMainWindow):
     # Slot handlers
     # ------------------------------------------------------------------
 
-    def _on_paste(self) -> None:
-        """Paste clipboard text into the URL input."""
-        clipboard = QApplication.clipboard()
-        text = clipboard.text().strip()
-        if text:
-            self._url_input.setText(text)
-            logger.debug("Pasted URL from clipboard: %s", text)
-        else:
-            self._status_bar.showMessage("Clipboard is empty.", 3000)
-
-    def _on_fetch_info(self) -> None:
-        """Placeholder: fetch video metadata."""
-        url = self._url_input.text().strip()
-        if not url:
-            self._status_bar.showMessage("Please enter a URL first.", 3000)
-            return
+    def _on_fetch_requested(self, url: str) -> None:
+        """Handle fetch_requested signal from UrlInputWidget."""
         logger.info("Fetch info requested for: %s", url)
+        self._url_input.set_loading(True)
         self._status_bar.showMessage(f"Fetching info for: {url}")
-        # Show info card with placeholder data until worker is implemented
-        self._info_title_lbl.setText("Fetching video information…")
-        self._info_channel_lbl.setText("Channel: —")
-        self._info_duration_lbl.setText("Duration: —")
+
+        # Show info card with placeholder until real worker is implemented
+        placeholder = VideoInfo(
+            url=url,
+            title="Fetching video information…",
+            channel="—",
+            duration=0,
+            thumbnail_url="",
+        )
+        self._video_info = None
+        self._video_info_widget.show_info(placeholder)
         self._info_card.setVisible(True)
 
+        # Re-enable URL input after showing placeholder (real fetch would use worker)
+        self._url_input.set_loading(False)
+        self._status_bar.showMessage("Video info fetched (stub). Press Download to queue.", 4000)
+
     def _on_browse(self) -> None:
-        """Open folder browser and update save path."""
         current = self._save_path_input.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
             self,
@@ -442,85 +359,110 @@ class MainWindow(QMainWindow):
             self._config.save()
             logger.debug("Download path set to: %s", folder)
 
-    def _on_download(self) -> None:
-        """Placeholder: queue a download."""
-        url = self._url_input.text().strip()
+    def _on_download_clicked(self) -> None:
+        """Queue a download when the Download button is pressed."""
+        url = self._url_input.current_url()
         if not url:
             self._status_bar.showMessage("Please enter a URL first.", 3000)
             return
+
+        video = self._video_info or VideoInfo(
+            url=url,
+            title=url,
+            channel="Unknown",
+            duration=0,
+            thumbnail_url="",
+        )
+
         resolution = self._resolution_combo.currentText()
-        fmt = self._format_combo.currentText()
-        path = self._save_path_input.text().strip()
+        fmt = self._format_combo.currentText().lower()
+        save_path = self._save_path_input.text().strip()
+
+        task = DownloadTask(
+            video_info=video,
+            resolution=resolution,
+            format=fmt,
+            save_path=save_path,
+            status="pending",
+        )
+
+        self.add_download_item(task)
+        self._update_progress_card()
+
         logger.info(
-            "Download requested — url=%s resolution=%s format=%s path=%s",
-            url,
-            resolution,
-            fmt,
-            path,
+            "Download queued — url=%s resolution=%s format=%s path=%s",
+            url, resolution, fmt, save_path,
         )
         self._status_bar.showMessage(
-            f"Queued: {url} [{resolution} / {fmt}]", 5000
+            f"Queued: {video.title[:60]} [{resolution} / {fmt.upper()}]", 5000
         )
-        # Remove "empty" placeholder and add a stub item
-        self._empty_lbl.setVisible(False)
-        self._add_download_item_stub(url, resolution, fmt)
-
-    def _add_download_item_stub(self, url: str, resolution: str, fmt: str) -> None:
-        """Add a placeholder download item to the list."""
-        from PySide6.QtWidgets import QProgressBar
-
-        item_frame = QFrame()
-        item_frame.setObjectName("downloadItem")
-        item_frame.setMinimumHeight(64)
-
-        item_layout = QVBoxLayout(item_frame)
-        item_layout.setContentsMargins(12, 8, 12, 8)
-        item_layout.setSpacing(4)
-
-        title_lbl = QLabel(url)
-        title_lbl.setObjectName("infoTitle")
-        title_lbl.setWordWrap(False)
-        font = title_lbl.font()
-        font.setPointSize(11)
-        title_lbl.setFont(font)
-        # Truncate long URLs for display
-        if len(url) > 80:
-            title_lbl.setText(url[:77] + "…")
-        item_layout.addWidget(title_lbl)
-
-        meta_lbl = QLabel(f"{resolution}  ·  {fmt}")
-        meta_lbl.setObjectName("infoMeta")
-        item_layout.addWidget(meta_lbl)
-
-        progress = QProgressBar()
-        progress.setValue(0)
-        progress.setFormat("Queued")
-        item_layout.addWidget(progress)
-
-        self._download_list_layout.addWidget(item_frame)
 
     def _on_toggle_theme(self) -> None:
-        """Switch between dark and light themes."""
         new_theme = "light" if self._current_theme == "dark" else "dark"
         self.load_theme(new_theme)
         logger.info("Theme toggled to: %s", new_theme)
 
     def _on_settings(self) -> None:
-        """Placeholder: open settings dialog."""
-        self._status_bar.showMessage("Settings – coming soon.", 3000)
-        logger.debug("Settings button clicked")
+        dialog = SettingsDialog(self._config, parent=self)
+        dialog.settings_changed.connect(self._on_settings_changed)
+        dialog.theme_changed.connect(self.load_theme)
+        dialog.exec()
+
+    def _on_settings_changed(self) -> None:
+        default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
+        self._save_path_input.setText(default_path)
+        logger.debug("Settings reloaded into main window")
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    def add_download_item(self, task: DownloadTask) -> None:
+        """Insert a DownloadItemWidget for *task* into the list."""
+        self._empty_lbl.setVisible(False)
+        item = DownloadItemWidget(task)
+        item.cancel_requested.connect(self._on_cancel_download)
+        item.open_file_requested.connect(self._on_open_file)
+        item.retry_requested.connect(self._on_retry_download)
+        self._download_items[task.task_id] = item
+        self._download_list_layout.addWidget(item)
+
+    def _on_cancel_download(self, task_id: str) -> None:
+        logger.info("Cancel requested for task: %s", task_id)
+        self._status_bar.showMessage("Download cancelled.", 3000)
+
+    def _on_open_file(self, file_path: str) -> None:
+        import subprocess, sys
+        logger.info("Open file requested: %s", file_path)
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", "/select,", file_path])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", file_path])
+            else:
+                subprocess.Popen(["xdg-open", str(Path(file_path).parent)])
+        except OSError as exc:
+            logger.error("Failed to open file location: %s", exc)
+
+    def _on_retry_download(self, task_id: str) -> None:
+        logger.info("Retry requested for task: %s", task_id)
+        self._status_bar.showMessage("Retry queued.", 3000)
+
+    def _update_progress_card(self) -> None:
+        total = len(self._download_items)
+        active = sum(
+            1 for w in self._download_items.values()
+            if hasattr(w, "_task_id")
+        )
+        completed = 0
+        self._progress_card.update_stats(total, active, completed)
 
     # ------------------------------------------------------------------
     # Theme management
     # ------------------------------------------------------------------
 
     def load_theme(self, theme: str) -> None:
-        """
-        Load and apply a QSS theme by name.
-
-        Args:
-            theme: ``"dark"`` or ``"light"``.
-        """
+        """Load and apply a QSS theme by name ('dark' or 'light')."""
         qss_path = _STYLES_DIR / f"{theme}.qss"
         if not qss_path.exists():
             logger.warning("Theme file not found: %s", qss_path)
@@ -540,10 +482,13 @@ class MainWindow(QMainWindow):
         self._config.set("theme", theme)
         self._config.save()
 
-        # Update toggle button label
-        if theme == "dark":
-            self._theme_btn.setText("☀ Light")
-        else:
-            self._theme_btn.setText("☾ Dark")
-
+        self._theme_btn.setText("☀ Light" if theme == "dark" else "☾ Dark")
         logger.debug("Theme applied: %s", theme)
+
+    # ------------------------------------------------------------------
+    # Window events
+    # ------------------------------------------------------------------
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        logger.info("TubeGrab shutting down")
+        super().closeEvent(event)
