@@ -1,5 +1,5 @@
 """
-TubeGrab – Main Application Window (Phase 2)
+TubeGrab – Main Application Window (Phase 3)
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.ffmpeg import find_ffmpeg
 from app.models.download_task import DownloadTask
 from app.models.video import VideoInfo
 from app.ui.components.download_item import DownloadItemWidget
@@ -36,6 +37,8 @@ from app.ui.components.video_info import VideoInfoWidget
 from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
+from app.workers.download_worker import DownloadWorker
+from app.workers.metadata_worker import MetadataWorker
 
 logger = get_logger("ui.main_window")
 
@@ -52,9 +55,21 @@ class MainWindow(QMainWindow):
         self._current_theme: str = self._config.get("theme") or "dark"
         self._video_info: VideoInfo | None = None
         self._download_items: dict[str, DownloadItemWidget] = {}
+        self._tasks: dict[str, DownloadTask] = {}
+        self._download_workers: dict[str, DownloadWorker] = {}
+        self._metadata_worker: MetadataWorker | None = None
+
+        # Detect ffmpeg once at startup
+        self._ffmpeg_path: str | None = find_ffmpeg()
 
         self._build_ui()
         self._connect_signals()
+
+        if self._ffmpeg_path:
+            logger.info("ffmpeg detected at: %s", self._ffmpeg_path)
+        else:
+            logger.warning("ffmpeg not found — audio post-processing will be unavailable")
+
         logger.info("MainWindow initialised")
 
     # ------------------------------------------------------------------
@@ -142,7 +157,13 @@ class MainWindow(QMainWindow):
 
         self._progress_card = ProgressCardWidget()
         self._status_bar.addPermanentWidget(self._progress_card)
-        self._status_bar.showMessage("Ready")
+
+        if self._ffmpeg_path is None:
+            self._status_bar.showMessage(
+                "Warning: ffmpeg not found — audio extraction may fail.", 8000
+            )
+        else:
+            self._status_bar.showMessage("Ready")
 
     def _build_top_bar(self) -> QWidget:
         top_bar = QWidget()
@@ -320,30 +341,60 @@ class MainWindow(QMainWindow):
         self._settings_btn.clicked.connect(self._on_settings)
 
     # ------------------------------------------------------------------
-    # Slot handlers
+    # Slot handlers — metadata
     # ------------------------------------------------------------------
 
     def _on_fetch_requested(self, url: str) -> None:
         """Handle fetch_requested signal from UrlInputWidget."""
         logger.info("Fetch info requested for: %s", url)
+
+        # Stop any previously running metadata worker
+        if self._metadata_worker is not None and self._metadata_worker.isRunning():
+            self._metadata_worker.finished.disconnect()
+            self._metadata_worker.error.disconnect()
+            self._metadata_worker.quit()
+            self._metadata_worker.wait(3000)
+            self._metadata_worker = None
+
         self._url_input.set_loading(True)
-        self._status_bar.showMessage(f"Fetching info for: {url}")
+        self._status_bar.showMessage(f"Fetching info for: {url} …")
 
-        # Show info card with placeholder until real worker is implemented
-        placeholder = VideoInfo(
-            url=url,
-            title="Fetching video information…",
-            channel="—",
-            duration=0,
-            thumbnail_url="",
-        )
-        self._video_info = None
-        self._video_info_widget.show_info(placeholder)
+        worker = MetadataWorker(url, parent=self)
+        worker.finished.connect(self._on_metadata_finished)
+        worker.error.connect(self._on_metadata_error)
+        self._metadata_worker = worker
+        worker.start()
+
+    def _on_metadata_finished(self, video_info: VideoInfo) -> None:
+        """Slot: metadata fetched successfully."""
+        self._video_info = video_info
+        self._video_info_widget.show_info(video_info)
         self._info_card.setVisible(True)
-
-        # Re-enable URL input after showing placeholder (real fetch would use worker)
         self._url_input.set_loading(False)
-        self._status_bar.showMessage("Video info fetched (stub). Press Download to queue.", 4000)
+
+        # Populate the resolution combo with whatever this video actually offers
+        self._resolution_combo.clear()
+        if video_info.available_resolutions:
+            self._resolution_combo.addItems(video_info.available_resolutions)
+        else:
+            self._resolution_combo.addItems(
+                ["Best", "1080p", "720p", "480p", "360p"]
+            )
+
+        self._status_bar.showMessage(
+            f"Ready — {video_info.title[:70]}", 6000
+        )
+        logger.info("Metadata displayed for: %s", video_info.title)
+
+    def _on_metadata_error(self, msg: str) -> None:
+        """Slot: metadata fetch failed."""
+        self._url_input.set_loading(False)
+        self._status_bar.showMessage(f"Error: {msg}", 8000)
+        logger.warning("Metadata fetch error: %s", msg)
+
+    # ------------------------------------------------------------------
+    # Slot handlers — download
+    # ------------------------------------------------------------------
 
     def _on_browse(self) -> None:
         current = self._save_path_input.text() or str(Path.home() / "Downloads")
@@ -360,7 +411,7 @@ class MainWindow(QMainWindow):
             logger.debug("Download path set to: %s", folder)
 
     def _on_download_clicked(self) -> None:
-        """Queue a download when the Download button is pressed."""
+        """Queue and start a download when the Download button is pressed."""
         url = self._url_input.current_url()
         if not url:
             self._status_bar.showMessage("Please enter a URL first.", 3000)
@@ -383,19 +434,146 @@ class MainWindow(QMainWindow):
             resolution=resolution,
             format=fmt,
             save_path=save_path,
-            status="pending",
+            status="downloading",
         )
 
+        self._tasks[task.task_id] = task
         self.add_download_item(task)
         self._update_progress_card()
 
+        # Create and start the worker
+        worker = DownloadWorker(task, ffmpeg_path=self._ffmpeg_path, parent=self)
+        worker.progress_updated.connect(self._on_download_progress)
+        worker.finished.connect(self._on_download_finished)
+        worker.error.connect(self._on_download_error)
+        self._download_workers[task.task_id] = worker
+        worker.start()
+
         logger.info(
-            "Download queued — url=%s resolution=%s format=%s path=%s",
+            "Download started — url=%s resolution=%s format=%s path=%s",
             url, resolution, fmt, save_path,
         )
         self._status_bar.showMessage(
-            f"Queued: {video.title[:60]} [{resolution} / {fmt.upper()}]", 5000
+            f"Downloading: {video.title[:60]} [{resolution} / {fmt.upper()}]", 5000
         )
+
+    def _on_download_progress(
+        self,
+        task_id: str,
+        progress: float,
+        speed: str,
+        eta: str,
+        downloaded_bytes: int,
+        total_bytes: int,
+    ) -> None:
+        """Slot: update UI for in-progress download."""
+        task = self._tasks.get(task_id)
+        if task is None:
+            return
+
+        task.progress = progress
+        task.speed = speed
+        task.eta = eta
+        task.downloaded_bytes = downloaded_bytes
+        task.total_bytes = total_bytes
+        task.status = "downloading"
+
+        item = self._download_items.get(task_id)
+        if item is not None:
+            item.update_task(task)
+
+        self._update_progress_card()
+
+    def _on_download_finished(self, task_id: str) -> None:
+        """Slot: a download completed successfully."""
+        task = self._tasks.get(task_id)
+        if task is not None:
+            task.status = "completed"
+            task.progress = 100.0
+            item = self._download_items.get(task_id)
+            if item is not None:
+                item.update_task(task)
+
+        self._download_workers.pop(task_id, None)
+        self._update_progress_card()
+
+        title = task.video_info.title[:60] if task else task_id
+        self._status_bar.showMessage(f"Download complete: {title}", 6000)
+        logger.info("Download finished — task_id=%s", task_id)
+
+    def _on_download_error(self, task_id: str, msg: str) -> None:
+        """Slot: a download failed or was cancelled."""
+        task = self._tasks.get(task_id)
+        if task is not None:
+            task.status = "cancelled" if msg == "Cancelled" else "failed"
+            task.error_message = msg
+            item = self._download_items.get(task_id)
+            if item is not None:
+                item.update_task(task)
+
+        self._download_workers.pop(task_id, None)
+        self._update_progress_card()
+
+        if msg == "Cancelled":
+            self._status_bar.showMessage("Download cancelled.", 4000)
+            logger.info("Download cancelled — task_id=%s", task_id)
+        else:
+            self._status_bar.showMessage(f"Download failed: {msg}", 8000)
+            logger.error("Download failed — task_id=%s error=%s", task_id, msg)
+
+    def _on_cancel_download(self, task_id: str) -> None:
+        """Slot: user clicked Cancel on a DownloadItemWidget."""
+        worker = self._download_workers.get(task_id)
+        if worker is not None:
+            worker.cancel()
+            logger.info("Cancel signal sent to worker for task: %s", task_id)
+        else:
+            logger.info("Cancel requested but no active worker for task: %s", task_id)
+        self._status_bar.showMessage("Cancelling download…", 3000)
+
+    def _on_open_file(self, file_path: str) -> None:
+        import subprocess, sys
+        logger.info("Open file requested: %s", file_path)
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", "/select,", file_path])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", file_path])
+            else:
+                subprocess.Popen(["xdg-open", str(Path(file_path).parent)])
+        except OSError as exc:
+            logger.error("Failed to open file location: %s", exc)
+
+    def _on_retry_download(self, task_id: str) -> None:
+        """Re-queue a failed download."""
+        task = self._tasks.get(task_id)
+        if task is None:
+            logger.warning("Retry requested but task not found: %s", task_id)
+            self._status_bar.showMessage("Could not retry: task not found.", 3000)
+            return
+
+        # Reset task state
+        task.status = "downloading"
+        task.progress = 0.0
+        task.speed = ""
+        task.eta = ""
+        task.downloaded_bytes = 0
+        task.error_message = ""
+
+        item = self._download_items.get(task_id)
+        if item is not None:
+            item.update_task(task)
+
+        worker = DownloadWorker(task, ffmpeg_path=self._ffmpeg_path, parent=self)
+        worker.progress_updated.connect(self._on_download_progress)
+        worker.finished.connect(self._on_download_finished)
+        worker.error.connect(self._on_download_error)
+        self._download_workers[task_id] = worker
+        worker.start()
+
+        self._update_progress_card()
+        self._status_bar.showMessage("Retrying download…", 3000)
+        logger.info("Retry started for task: %s", task_id)
 
     def _on_toggle_theme(self) -> None:
         new_theme = "light" if self._current_theme == "dark" else "dark"
@@ -427,34 +605,17 @@ class MainWindow(QMainWindow):
         self._download_items[task.task_id] = item
         self._download_list_layout.addWidget(item)
 
-    def _on_cancel_download(self, task_id: str) -> None:
-        logger.info("Cancel requested for task: %s", task_id)
-        self._status_bar.showMessage("Download cancelled.", 3000)
-
-    def _on_open_file(self, file_path: str) -> None:
-        import subprocess, sys
-        logger.info("Open file requested: %s", file_path)
-        try:
-            if sys.platform == "win32":
-                subprocess.Popen(["explorer", "/select,", file_path])
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", file_path])
-            else:
-                subprocess.Popen(["xdg-open", str(Path(file_path).parent)])
-        except OSError as exc:
-            logger.error("Failed to open file location: %s", exc)
-
-    def _on_retry_download(self, task_id: str) -> None:
-        logger.info("Retry requested for task: %s", task_id)
-        self._status_bar.showMessage("Retry queued.", 3000)
-
     def _update_progress_card(self) -> None:
-        total = len(self._download_items)
+        """Recount tasks by status and refresh the ProgressCardWidget."""
+        total = len(self._tasks)
         active = sum(
-            1 for w in self._download_items.values()
-            if hasattr(w, "_task_id")
+            1 for t in self._tasks.values()
+            if t.status in ("pending", "downloading")
         )
-        completed = 0
+        completed = sum(
+            1 for t in self._tasks.values()
+            if t.status == "completed"
+        )
         self._progress_card.update_stats(total, active, completed)
 
     # ------------------------------------------------------------------
@@ -490,5 +651,30 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        logger.info("TubeGrab shutting down")
+        logger.info("TubeGrab shutting down — cancelling active workers")
+
+        # Cancel all running download workers and wait briefly
+        for task_id, worker in list(self._download_workers.items()):
+            if worker.isRunning():
+                logger.debug("Cancelling worker for task: %s", task_id)
+                worker.cancel()
+
+        for task_id, worker in list(self._download_workers.items()):
+            if worker.isRunning():
+                worker.quit()
+                finished = worker.wait(5000)  # 5 s timeout per worker
+                if not finished:
+                    logger.warning(
+                        "Worker for task %s did not stop in time; terminating",
+                        task_id,
+                    )
+                    worker.terminate()
+                    worker.wait(2000)
+
+        # Stop any in-flight metadata worker
+        if self._metadata_worker is not None and self._metadata_worker.isRunning():
+            self._metadata_worker.quit()
+            self._metadata_worker.wait(3000)
+
+        logger.info("All workers stopped — goodbye")
         super().closeEvent(event)
