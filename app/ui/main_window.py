@@ -1,11 +1,10 @@
 """
-TubeGrab – Main Application Window (Phase 3)
+TubeGrab – Main Application Window (Phase 4)
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from uuid import uuid4
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QFont
@@ -27,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.download_manager import DownloadManager
 from app.core.ffmpeg import find_ffmpeg
 from app.models.download_task import DownloadTask
 from app.models.video import VideoInfo
@@ -37,7 +37,6 @@ from app.ui.components.video_info import VideoInfoWidget
 from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
-from app.workers.download_worker import DownloadWorker
 from app.workers.metadata_worker import MetadataWorker
 
 logger = get_logger("ui.main_window")
@@ -55,12 +54,17 @@ class MainWindow(QMainWindow):
         self._current_theme: str = self._config.get("theme") or "dark"
         self._video_info: VideoInfo | None = None
         self._download_items: dict[str, DownloadItemWidget] = {}
-        self._tasks: dict[str, DownloadTask] = {}
-        self._download_workers: dict[str, DownloadWorker] = {}
         self._metadata_worker: MetadataWorker | None = None
 
         # Detect ffmpeg once at startup
         self._ffmpeg_path: str | None = find_ffmpeg()
+
+        # Centralised download manager (owns all workers)
+        self._download_manager = DownloadManager(
+            self._config,
+            self._ffmpeg_path,
+            parent=self,
+        )
 
         self._build_ui()
         self._connect_signals()
@@ -334,11 +338,23 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _connect_signals(self) -> None:
+        # URL / metadata
         self._url_input.fetch_requested.connect(self._on_fetch_requested)
+
+        # Download options toolbar
         self._browse_btn.clicked.connect(self._on_browse)
         self._download_btn.clicked.connect(self._on_download_clicked)
+
+        # App-level
         self._theme_btn.clicked.connect(self._on_toggle_theme)
         self._settings_btn.clicked.connect(self._on_settings)
+
+        # DownloadManager signals
+        self._download_manager.task_progress.connect(self._on_download_progress)
+        self._download_manager.task_finished.connect(self._on_download_finished)
+        self._download_manager.task_failed.connect(self._on_download_error_from_manager)
+        self._download_manager.task_cancelled.connect(self._on_download_cancelled)
+        self._download_manager.queue_changed.connect(self._on_queue_changed)
 
     # ------------------------------------------------------------------
     # Slot handlers — metadata
@@ -411,7 +427,7 @@ class MainWindow(QMainWindow):
             logger.debug("Download path set to: %s", folder)
 
     def _on_download_clicked(self) -> None:
-        """Queue and start a download when the Download button is pressed."""
+        """Queue a download via DownloadManager when the Download button is pressed."""
         url = self._url_input.current_url()
         if not url:
             self._status_bar.showMessage("Please enter a URL first.", 3000)
@@ -434,105 +450,110 @@ class MainWindow(QMainWindow):
             resolution=resolution,
             format=fmt,
             save_path=save_path,
-            status="downloading",
         )
 
-        self._tasks[task.task_id] = task
+        # Hand ownership to the manager and add the UI item
+        self._download_manager.add_task(task)
         self.add_download_item(task)
-        self._update_progress_card()
-
-        # Create and start the worker
-        worker = DownloadWorker(task, ffmpeg_path=self._ffmpeg_path, parent=self)
-        worker.progress_updated.connect(self._on_download_progress)
-        worker.finished.connect(self._on_download_finished)
-        worker.error.connect(self._on_download_error)
-        self._download_workers[task.task_id] = worker
-        worker.start()
 
         logger.info(
-            "Download started — url=%s resolution=%s format=%s path=%s",
+            "Download queued — url=%s resolution=%s format=%s path=%s",
             url, resolution, fmt, save_path,
         )
-        self._status_bar.showMessage(
-            f"Downloading: {video.title[:60]} [{resolution} / {fmt.upper()}]", 5000
-        )
+
+    def _on_cancel_download(self, task_id: str) -> None:
+        """Slot: user clicked Cancel on a DownloadItemWidget."""
+        logger.info("Cancel requested via UI — task_id=%s", task_id)
+        self._download_manager.cancel_task(task_id)
+        self._status_bar.showMessage("Cancelling download…", 3000)
+
+    def _on_retry_download(self, task_id: str) -> None:
+        """Re-queue a failed/cancelled download through the manager."""
+        task = self._download_manager.get_task(task_id)
+        if task is None:
+            logger.warning("Retry requested but task not found: %s", task_id)
+            self._status_bar.showMessage("Could not retry: task not found.", 3000)
+            return
+
+        self._download_manager.retry_task(task_id)
+
+        # Update the existing item widget with the reset task state
+        item = self._download_items.get(task_id)
+        if item is not None:
+            item.update_task(task)
+
+        self._status_bar.showMessage("Retrying download…", 3000)
+        logger.info("Retry requested for task: %s", task_id)
 
     def _on_download_progress(
         self,
         task_id: str,
-        progress: float,
+        pct: float,
         speed: str,
         eta: str,
         downloaded_bytes: int,
         total_bytes: int,
     ) -> None:
         """Slot: update UI for in-progress download."""
-        task = self._tasks.get(task_id)
+        task = self._download_manager.get_task(task_id)
         if task is None:
             return
-
-        task.progress = progress
-        task.speed = speed
-        task.eta = eta
-        task.downloaded_bytes = downloaded_bytes
-        task.total_bytes = total_bytes
-        task.status = "downloading"
 
         item = self._download_items.get(task_id)
         if item is not None:
             item.update_task(task)
 
-        self._update_progress_card()
-
     def _on_download_finished(self, task_id: str) -> None:
         """Slot: a download completed successfully."""
-        task = self._tasks.get(task_id)
+        task = self._download_manager.get_task(task_id)
         if task is not None:
-            task.status = "completed"
-            task.progress = 100.0
             item = self._download_items.get(task_id)
             if item is not None:
                 item.update_task(task)
+            title = task.video_info.title[:60]
+        else:
+            title = task_id
 
-        self._download_workers.pop(task_id, None)
-        self._update_progress_card()
-
-        title = task.video_info.title[:60] if task else task_id
         self._status_bar.showMessage(f"Download complete: {title}", 6000)
         logger.info("Download finished — task_id=%s", task_id)
 
-    def _on_download_error(self, task_id: str, msg: str) -> None:
-        """Slot: a download failed or was cancelled."""
-        task = self._tasks.get(task_id)
+    def _on_download_error_from_manager(self, task_id: str, msg: str) -> None:
+        """Slot: a download failed (non-cancellation error)."""
+        task = self._download_manager.get_task(task_id)
         if task is not None:
-            task.status = "cancelled" if msg == "Cancelled" else "failed"
-            task.error_message = msg
             item = self._download_items.get(task_id)
             if item is not None:
                 item.update_task(task)
 
-        self._download_workers.pop(task_id, None)
-        self._update_progress_card()
+        self._status_bar.showMessage(f"Download failed: {msg}", 8000)
+        logger.error("Download failed — task_id=%s error=%s", task_id, msg)
 
-        if msg == "Cancelled":
-            self._status_bar.showMessage("Download cancelled.", 4000)
-            logger.info("Download cancelled — task_id=%s", task_id)
-        else:
-            self._status_bar.showMessage(f"Download failed: {msg}", 8000)
-            logger.error("Download failed — task_id=%s error=%s", task_id, msg)
+    def _on_download_cancelled(self, task_id: str) -> None:
+        """Slot: a download was cancelled."""
+        task = self._download_manager.get_task(task_id)
+        if task is not None:
+            item = self._download_items.get(task_id)
+            if item is not None:
+                item.update_task(task)
 
-    def _on_cancel_download(self, task_id: str) -> None:
-        """Slot: user clicked Cancel on a DownloadItemWidget."""
-        worker = self._download_workers.get(task_id)
-        if worker is not None:
-            worker.cancel()
-            logger.info("Cancel signal sent to worker for task: %s", task_id)
-        else:
-            logger.info("Cancel requested but no active worker for task: %s", task_id)
-        self._status_bar.showMessage("Cancelling download…", 3000)
+        self._status_bar.showMessage("Download cancelled.", 4000)
+        logger.info("Download cancelled — task_id=%s", task_id)
+
+    def _on_queue_changed(self, total: int, active: int, pending: int) -> None:
+        """Slot: update the progress card and status bar whenever queue state changes."""
+        completed = total - active - pending
+        # Clamp to avoid negative values if counts are momentarily inconsistent
+        completed = max(0, completed)
+        self._progress_card.update_stats(total, active, completed)
+
+        if active > 0:
+            self._status_bar.showMessage(
+                f"Downloading {active} file(s) — {pending} queued", 0
+            )
 
     def _on_open_file(self, file_path: str) -> None:
-        import subprocess, sys
+        import subprocess
+        import sys
         logger.info("Open file requested: %s", file_path)
         try:
             if sys.platform == "win32":
@@ -543,37 +564,6 @@ class MainWindow(QMainWindow):
                 subprocess.Popen(["xdg-open", str(Path(file_path).parent)])
         except OSError as exc:
             logger.error("Failed to open file location: %s", exc)
-
-    def _on_retry_download(self, task_id: str) -> None:
-        """Re-queue a failed download."""
-        task = self._tasks.get(task_id)
-        if task is None:
-            logger.warning("Retry requested but task not found: %s", task_id)
-            self._status_bar.showMessage("Could not retry: task not found.", 3000)
-            return
-
-        # Reset task state
-        task.status = "downloading"
-        task.progress = 0.0
-        task.speed = ""
-        task.eta = ""
-        task.downloaded_bytes = 0
-        task.error_message = ""
-
-        item = self._download_items.get(task_id)
-        if item is not None:
-            item.update_task(task)
-
-        worker = DownloadWorker(task, ffmpeg_path=self._ffmpeg_path, parent=self)
-        worker.progress_updated.connect(self._on_download_progress)
-        worker.finished.connect(self._on_download_finished)
-        worker.error.connect(self._on_download_error)
-        self._download_workers[task_id] = worker
-        worker.start()
-
-        self._update_progress_card()
-        self._status_bar.showMessage("Retrying download…", 3000)
-        logger.info("Retry started for task: %s", task_id)
 
     def _on_toggle_theme(self) -> None:
         new_theme = "light" if self._current_theme == "dark" else "dark"
@@ -606,17 +596,11 @@ class MainWindow(QMainWindow):
         self._download_list_layout.addWidget(item)
 
     def _update_progress_card(self) -> None:
-        """Recount tasks by status and refresh the ProgressCardWidget."""
-        total = len(self._tasks)
-        active = sum(
-            1 for t in self._tasks.values()
-            if t.status in ("pending", "downloading")
-        )
-        completed = sum(
-            1 for t in self._tasks.values()
-            if t.status == "completed"
-        )
-        self._progress_card.update_stats(total, active, completed)
+        """Delegate to queue_changed counts sourced from the manager."""
+        total = self._download_manager.total_count
+        active = self._download_manager.active_count
+        pending = self._download_manager.pending_count
+        self._on_queue_changed(total, active, pending)
 
     # ------------------------------------------------------------------
     # Theme management
@@ -651,23 +635,18 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        logger.info("TubeGrab shutting down — cancelling active workers")
+        logger.info("TubeGrab shutting down — cancelling all downloads")
 
-        # Cancel all running download workers and wait briefly
-        for task_id, worker in list(self._download_workers.items()):
-            if worker.isRunning():
-                logger.debug("Cancelling worker for task: %s", task_id)
-                worker.cancel()
+        # Cancel all downloads through the manager
+        self._download_manager.cancel_all()
 
-        for task_id, worker in list(self._download_workers.items()):
+        # Give active workers a moment to stop cleanly
+        for worker in list(self._download_manager._workers.values()):
             if worker.isRunning():
                 worker.quit()
-                finished = worker.wait(5000)  # 5 s timeout per worker
+                finished = worker.wait(5000)
                 if not finished:
-                    logger.warning(
-                        "Worker for task %s did not stop in time; terminating",
-                        task_id,
-                    )
+                    logger.warning("Worker did not stop in time; terminating")
                     worker.terminate()
                     worker.wait(2000)
 
