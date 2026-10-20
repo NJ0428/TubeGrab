@@ -95,7 +95,7 @@ class DownloadItemWidget(QFrame):
         self._cancel_btn.clicked.connect(lambda: self.cancel_requested.emit(self._task_id))
         btn_col.addWidget(self._cancel_btn)
 
-        self._open_btn = QPushButton("Open")
+        self._open_btn = QPushButton("Open File")
         self._open_btn.setObjectName("iconButton")
         self._open_btn.setFixedWidth(64)
         self._open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -142,7 +142,7 @@ class DownloadItemWidget(QFrame):
         self._retry_btn.setVisible(is_failed)
 
         if is_done:
-            self._file_path = os.path.join(task.save_path, task.video_info.title)
+            self._file_path = task.output_file or os.path.join(task.save_path, task.video_info.title)
 
         if task.error_message and is_failed:
             self._status_lbl.setToolTip(task.error_message)

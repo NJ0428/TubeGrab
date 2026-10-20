@@ -36,7 +36,7 @@ class DownloadManager(QObject):
     task_queued: Signal = Signal(str)
     task_started: Signal = Signal(str)
     task_progress: Signal = Signal(str, float, str, str, int, int)
-    task_finished: Signal = Signal(str)
+    task_finished: Signal = Signal(str, str)
     task_failed: Signal = Signal(str, str)
     task_cancelled: Signal = Signal(str)
     queue_changed: Signal = Signal(int, int, int)
@@ -207,7 +207,7 @@ class DownloadManager(QObject):
                 _tid=task_id: self._on_worker_progress(_tid, pct, spd, eta, dl, tot)
             )
             worker.finished.connect(
-                lambda tid, _tid=task_id: self._on_worker_finished(_tid)
+                lambda tid, fp, _tid=task_id: self._on_worker_finished(_tid, fp)
             )
             worker.error.connect(
                 lambda tid, msg, _tid=task_id: self._on_worker_error(_tid, msg)
@@ -247,16 +247,17 @@ class DownloadManager(QObject):
             task.total_bytes = total
         self.task_progress.emit(task_id, pct, speed, eta, dl, total)
 
-    def _on_worker_finished(self, task_id: str) -> None:
+    def _on_worker_finished(self, task_id: str, file_path: str) -> None:
         """Handle successful completion of a worker."""
         task = self._tasks.get(task_id)
         if task is not None:
             task.status = "completed"
             task.progress = 100.0
+            task.output_file = file_path
 
         self._workers.pop(task_id, None)
         logger.info("Task completed — task_id=%s", task_id)
-        self.task_finished.emit(task_id)
+        self.task_finished.emit(task_id, file_path)
         self.queue_changed.emit(self.total_count, self.active_count, self.pending_count)
         self._try_start_next()
 
