@@ -24,6 +24,7 @@ class DownloadTask:
     downloaded_bytes: int = 0
     total_bytes: int = 0
     error_message: str = ""
+    output_file: str = ""
 
     @property
     def total_bytes_str(self) -> str:

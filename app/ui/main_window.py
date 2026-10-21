@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,6 +34,8 @@ from app.ui.components.download_item import DownloadItemWidget
 from app.ui.components.progress_card import ProgressCardWidget
 from app.ui.components.url_input import UrlInputWidget
 from app.ui.components.video_info import VideoInfoWidget
+from app.ui.dialogs.about_dialog import AboutDialog
+from app.ui.dialogs.ffmpeg_dialog import FfmpegWarningDialog
 from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
@@ -166,6 +168,7 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(
                 "Warning: ffmpeg not found — audio extraction may fail.", 8000
             )
+            QTimer.singleShot(500, self._show_ffmpeg_warning)
         else:
             self._status_bar.showMessage("Ready")
 
@@ -196,6 +199,13 @@ class MainWindow(QMainWindow):
         self._theme_btn.setFixedHeight(32)
         self._theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._theme_btn)
+
+        self._about_btn = QPushButton("ℹ About")
+        self._about_btn.setObjectName("iconButton")
+        self._about_btn.setToolTip("About TubeGrab")
+        self._about_btn.setFixedHeight(32)
+        self._about_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addWidget(self._about_btn)
 
         self._settings_btn = QPushButton("⚙ Settings")
         self._settings_btn.setObjectName("iconButton")
@@ -304,9 +314,27 @@ class MainWindow(QMainWindow):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(6)
 
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(8)
+
         header_lbl = QLabel("DOWNLOADS")
         header_lbl.setObjectName("sectionLabel")
-        outer_layout.addWidget(header_lbl)
+        header_row.addWidget(header_lbl)
+
+        header_row.addSpacerItem(
+            QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        )
+
+        self._clear_btn = QPushButton("Clear Completed")
+        self._clear_btn.setObjectName("clearBtn")
+        self._clear_btn.setToolTip("Remove completed, failed, and cancelled items")
+        self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._clear_btn.setFixedHeight(26)
+        self._clear_btn.clicked.connect(self._on_clear_completed)
+        header_row.addWidget(self._clear_btn)
+
+        outer_layout.addLayout(header_row)
 
         self._download_scroll = QScrollArea()
         self._download_scroll.setObjectName("downloadScroll")
@@ -347,6 +375,7 @@ class MainWindow(QMainWindow):
 
         # App-level
         self._theme_btn.clicked.connect(self._on_toggle_theme)
+        self._about_btn.clicked.connect(self._on_about)
         self._settings_btn.clicked.connect(self._on_settings)
 
         # DownloadManager signals
@@ -503,7 +532,7 @@ class MainWindow(QMainWindow):
         if item is not None:
             item.update_task(task)
 
-    def _on_download_finished(self, task_id: str) -> None:
+    def _on_download_finished(self, task_id: str, file_path: str) -> None:
         """Slot: a download completed successfully."""
         task = self._download_manager.get_task(task_id)
         if task is not None:
@@ -515,7 +544,7 @@ class MainWindow(QMainWindow):
             title = task_id
 
         self._status_bar.showMessage(f"Download complete: {title}", 6000)
-        logger.info("Download finished — task_id=%s", task_id)
+        logger.info("Download finished — task_id=%s file_path=%s", task_id, file_path)
 
     def _on_download_error_from_manager(self, task_id: str, msg: str) -> None:
         """Slot: a download failed (non-cancellation error)."""
@@ -580,6 +609,38 @@ class MainWindow(QMainWindow):
         default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
         self._save_path_input.setText(default_path)
         logger.debug("Settings reloaded into main window")
+
+    def _on_about(self) -> None:
+        """Open the About dialog."""
+        dialog = AboutDialog(parent=self)
+        dialog.exec()
+
+    def _show_ffmpeg_warning(self) -> None:
+        """Show the FFmpeg warning dialog (called via QTimer after main window appears)."""
+        dialog = FfmpegWarningDialog(parent=self)
+        dialog.exec()
+
+    def _on_clear_completed(self) -> None:
+        """Remove all completed, failed, and cancelled download items from the UI."""
+        done_statuses = {"completed", "failed", "cancelled"}
+        to_remove = [
+            task_id
+            for task_id, item in self._download_items.items()
+            if self._download_manager.get_task(task_id) is not None
+            and self._download_manager.get_task(task_id).status in done_statuses
+        ]
+
+        for task_id in to_remove:
+            item = self._download_items.pop(task_id, None)
+            if item is not None:
+                self._download_list_layout.removeWidget(item)
+                item.setParent(None)
+                item.deleteLater()
+
+        if not self._download_items:
+            self._empty_lbl.setVisible(True)
+
+        logger.debug("Cleared %d completed/failed/cancelled items", len(to_remove))
 
     # ------------------------------------------------------------------
     # Public helpers
