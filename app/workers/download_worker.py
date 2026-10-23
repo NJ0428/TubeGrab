@@ -24,7 +24,7 @@ class DownloadWorker(QThread):
     """
 
     progress_updated: Signal = Signal(str, float, str, str, int, int)
-    finished: Signal = Signal(str)
+    finished: Signal = Signal(str, str)
     error: Signal = Signal(str, str)
 
     def __init__(
@@ -93,7 +93,7 @@ class DownloadWorker(QThread):
                 cancel_check=cancel_check,
             )
             logger.info("DownloadWorker finished — task_id=%s path=%s", task_id, _filepath)
-            self.finished.emit(task_id)
+            self.finished.emit(task_id, _filepath or "")
         except Exception as exc:
             msg = str(exc)
             if "Cancelled" in msg:
