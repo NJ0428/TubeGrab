@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from app.core.download_manager import DownloadManager
 from app.core.ffmpeg import find_ffmpeg
 from app.models.download_task import DownloadTask
+from app.models.playlist import PlaylistInfo
 from app.models.video import VideoInfo
 from app.ui.components.download_item import DownloadItemWidget
 from app.ui.components.progress_card import ProgressCardWidget
@@ -36,10 +37,13 @@ from app.ui.components.url_input import UrlInputWidget
 from app.ui.components.video_info import VideoInfoWidget
 from app.ui.dialogs.about_dialog import AboutDialog
 from app.ui.dialogs.ffmpeg_dialog import FfmpegWarningDialog
+from app.ui.dialogs.playlist_dialog import PlaylistDialog
 from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
+from app.utils.validators import is_playlist_url
 from app.workers.metadata_worker import MetadataWorker
+from app.workers.playlist_worker import PlaylistWorker
 
 logger = get_logger("ui.main_window")
 
@@ -57,6 +61,7 @@ class MainWindow(QMainWindow):
         self._video_info: VideoInfo | None = None
         self._download_items: dict[str, DownloadItemWidget] = {}
         self._metadata_worker: MetadataWorker | None = None
+        self._playlist_worker: PlaylistWorker | None = None
 
         # Detect ffmpeg once at startup
         self._ffmpeg_path: str | None = find_ffmpeg()
@@ -392,8 +397,13 @@ class MainWindow(QMainWindow):
     def _on_fetch_requested(self, url: str) -> None:
         """Handle fetch_requested signal from UrlInputWidget."""
         logger.info("Fetch info requested for: %s", url)
+        if is_playlist_url(url):
+            self._start_playlist_fetch(url)
+        else:
+            self._start_metadata_fetch(url)
 
-        # Stop any previously running metadata worker
+    def _start_metadata_fetch(self, url: str) -> None:
+        """Stop any old worker, create a new MetadataWorker and start it."""
         if self._metadata_worker is not None and self._metadata_worker.isRunning():
             self._metadata_worker.finished.disconnect()
             self._metadata_worker.error.disconnect()
@@ -408,6 +418,26 @@ class MainWindow(QMainWindow):
         worker.finished.connect(self._on_metadata_finished)
         worker.error.connect(self._on_metadata_error)
         self._metadata_worker = worker
+        worker.start()
+
+    def _start_playlist_fetch(self, url: str) -> None:
+        """Stop any old playlist worker, create a new PlaylistWorker and start it."""
+        if self._playlist_worker is not None and self._playlist_worker.isRunning():
+            self._playlist_worker.finished.disconnect()
+            self._playlist_worker.error.disconnect()
+            self._playlist_worker.progress.disconnect()
+            self._playlist_worker.quit()
+            self._playlist_worker.wait(3000)
+            self._playlist_worker = None
+
+        self._url_input.set_loading(True)
+        self._status_bar.showMessage("Fetching playlist info…")
+
+        worker = PlaylistWorker(url, parent=self)
+        worker.finished.connect(self._on_playlist_finished)
+        worker.error.connect(self._on_playlist_error)
+        worker.progress.connect(self._on_playlist_progress)
+        self._playlist_worker = worker
         worker.start()
 
     def _on_metadata_finished(self, video_info: VideoInfo) -> None:
@@ -436,6 +466,68 @@ class MainWindow(QMainWindow):
         self._url_input.set_loading(False)
         self._status_bar.showMessage(f"Error: {msg}", 8000)
         logger.warning("Metadata fetch error: %s", msg)
+
+    # ------------------------------------------------------------------
+    # Slot handlers — playlist
+    # ------------------------------------------------------------------
+
+    def _on_playlist_progress(self, current: int, total: int) -> None:
+        """Slot: update status bar while playlist entries are being fetched."""
+        self._status_bar.showMessage(f"Fetching playlist: {current}/{total} videos…")
+
+    def _on_playlist_finished(self, playlist_info: PlaylistInfo) -> None:
+        """Slot: playlist metadata fetched successfully — open the selection dialog."""
+        self._url_input.set_loading(False)
+        logger.info(
+            "Playlist fetched — title=%r entries=%d",
+            playlist_info.title,
+            playlist_info.total_count,
+        )
+
+        dialog = PlaylistDialog(playlist_info, self._config, parent=self)
+        dialog.download_requested.connect(self._on_playlist_download_requested)
+        dialog.exec()
+
+    def _on_playlist_error(self, msg: str) -> None:
+        """Slot: playlist fetch failed."""
+        self._url_input.set_loading(False)
+        self._status_bar.showMessage(f"Playlist error: {msg}", 8000)
+        logger.warning("Playlist fetch error: %s", msg)
+
+    def _on_playlist_download_requested(
+        self,
+        urls: list,
+        resolution: str,
+        fmt: str,
+        save_path: str,
+    ) -> None:
+        """Slot: user confirmed playlist download — queue all selected videos."""
+        fmt_lower = fmt.lower()
+        for url in urls:
+            vi = VideoInfo(
+                url=url,
+                title=url,
+                channel="",
+                duration=0,
+                thumbnail_url="",
+            )
+            task = DownloadTask(
+                video_info=vi,
+                resolution=resolution,
+                format=fmt_lower,
+                save_path=save_path,
+            )
+            self._download_manager.add_task(task)
+            self.add_download_item(task)
+
+        self._status_bar.showMessage(f"Queued {len(urls)} videos for download")
+        logger.info(
+            "Queued %d playlist videos — resolution=%s format=%s path=%s",
+            len(urls),
+            resolution,
+            fmt_lower,
+            save_path,
+        )
 
     # ------------------------------------------------------------------
     # Slot handlers — download
@@ -715,6 +807,11 @@ class MainWindow(QMainWindow):
         if self._metadata_worker is not None and self._metadata_worker.isRunning():
             self._metadata_worker.quit()
             self._metadata_worker.wait(3000)
+
+        # Stop any in-flight playlist worker
+        if self._playlist_worker is not None and self._playlist_worker.isRunning():
+            self._playlist_worker.quit()
+            self._playlist_worker.wait(3000)
 
         logger.info("All workers stopped — goodbye")
         super().closeEvent(event)
