@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.utils.validators import is_valid_youtube_url
+from app.utils.validators import is_playlist_url, is_valid_url, is_valid_youtube_url
 
 
 class UrlInputWidget(QWidget):
@@ -84,17 +84,29 @@ class UrlInputWidget(QWidget):
         self._fetch_btn.clicked.connect(self._on_fetch)
 
     def _on_text_changed(self, text: str) -> None:
-        valid = is_valid_youtube_url(text)
+        stripped = text.strip()
+        valid_video = is_valid_youtube_url(stripped)
+        playlist = is_playlist_url(stripped)
+        valid = valid_video or playlist
+
         self._fetch_btn.setEnabled(valid)
-        if text.strip():
-            if valid:
+
+        if stripped:
+            if valid_video and not playlist:
                 self._valid_indicator.setText("✔ Valid URL")
-                self._valid_indicator.setStyleSheet("color: #4caf50;")
+                self._valid_indicator.setObjectName("urlValidValid")
+                self._valid_indicator.setStyleSheet("")
+            elif playlist:
+                self._valid_indicator.setText("↳ Playlist detected")
+                self._valid_indicator.setObjectName("urlValidPlaylist")
+                self._valid_indicator.setStyleSheet("")
             else:
                 self._valid_indicator.setText("✘ Invalid URL")
-                self._valid_indicator.setStyleSheet("color: #e94560;")
+                self._valid_indicator.setObjectName("urlValidInvalid")
+                self._valid_indicator.setStyleSheet("")
         else:
             self._valid_indicator.setText("")
+            self._valid_indicator.setObjectName("urlValidIndicator")
             self._valid_indicator.setStyleSheet("")
 
     def _on_paste(self) -> None:
@@ -105,7 +117,7 @@ class UrlInputWidget(QWidget):
 
     def _on_fetch(self) -> None:
         url = self._url_edit.text().strip()
-        if url and is_valid_youtube_url(url):
+        if url and is_valid_url(url):
             self.fetch_requested.emit(url)
 
     def set_loading(self, loading: bool) -> None:
