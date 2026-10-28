@@ -83,6 +83,11 @@ class MetadataFetcher:
         # --- Derive available resolutions ---
         available_resolutions = _extract_resolutions(raw_formats)
 
+        # --- Parse available subtitles ---
+        subtitles_raw: dict = info.get("subtitles") or {}
+        auto_captions_raw: dict = info.get("automatic_captions") or {}
+        available_subtitles = _extract_subtitles(subtitles_raw, auto_captions_raw)
+
         video_info = VideoInfo(
             url=url,
             title=title,
@@ -91,6 +96,7 @@ class MetadataFetcher:
             thumbnail_url=thumbnail_url,
             formats=raw_formats,
             available_resolutions=available_resolutions,
+            available_subtitles=available_subtitles,
         )
         logger.info(
             "Metadata fetched — title=%r channel=%r duration=%d resolutions=%s",
@@ -105,6 +111,66 @@ class MetadataFetcher:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+_LANG_NAMES: dict[str, str] = {
+    "ko": "Korean",
+    "en": "English",
+    "ja": "Japanese",
+    "zh": "Chinese",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "ar": "Arabic",
+    "hi": "Hindi",
+    "it": "Italian",
+}
+
+
+def _lang_display_name(code: str) -> str:
+    """Return a human-readable language name for *code*.
+
+    Args:
+        code: A BCP-47 language code, e.g. ``"ko"`` or ``"en"``.
+
+    Returns:
+        A human-readable name such as ``"Korean"``, falling back to the
+        code itself capitalised when no mapping exists.
+    """
+    # Normalise: strip region tags for lookup (e.g. "en-US" → "en")
+    base = code.split("-")[0].lower()
+    return _LANG_NAMES.get(base, code.capitalize())
+
+
+def _extract_subtitles(
+    subtitles_raw: dict,
+    auto_captions_raw: dict,
+) -> dict[str, str]:
+    """Merge manual subtitles and auto-captions into a single mapping.
+
+    Language codes that appear *only* in ``auto_captions_raw`` receive an
+    ``" (auto)"`` suffix in their display name.
+
+    Args:
+        subtitles_raw:    ``info["subtitles"]`` from yt-dlp.
+        auto_captions_raw: ``info["automatic_captions"]`` from yt-dlp.
+
+    Returns:
+        A dict mapping language code to display name, e.g.
+        ``{"ko": "Korean", "en": "English (auto)"}``.
+    """
+    result: dict[str, str] = {}
+
+    for code in subtitles_raw:
+        result[code] = _lang_display_name(code)
+
+    for code in auto_captions_raw:
+        if code not in result:
+            result[code] = _lang_display_name(code) + " (auto)"
+
+    return result
+
 
 def _extract_resolutions(formats: list[dict]) -> list[str]:
     """Extract unique video heights from the formats list.

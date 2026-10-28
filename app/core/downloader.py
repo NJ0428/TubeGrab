@@ -196,4 +196,21 @@ class Downloader:
         else:
             opts["merge_output_format"] = task.format
 
+        if task.subtitle_langs and task.subtitle_format:
+            opts["writesubtitles"] = True
+            opts["subtitleslangs"] = task.subtitle_langs
+            opts["subtitlesformat"] = task.subtitle_format
+            opts["writeautomaticsub"] = True  # allow auto-generated as fallback
+            if task.subtitle_only:
+                opts["skip_download"] = True
+                opts.pop("merge_output_format", None)
+            else:
+                # Embed subtitles in video when the container supports it (mp4 only)
+                if task.format == "mp4":
+                    existing_pp = opts.get("postprocessors", [])
+                    existing_pp.append(
+                        {"key": "FFmpegEmbedSubtitle", "already_have_subtitle": False}
+                    )
+                    opts["postprocessors"] = existing_pp
+
         return opts
