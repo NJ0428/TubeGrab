@@ -25,6 +25,9 @@ class DownloadTask:
     total_bytes: int = 0
     error_message: str = ""
     output_file: str = ""
+    subtitle_langs: list[str] = field(default_factory=list)  # e.g. ["ko", "en"]
+    subtitle_format: str = ""                                  # "srt" or "vtt"
+    subtitle_only: bool = False                                # download subtitle without video
 
     @property
     def total_bytes_str(self) -> str:
