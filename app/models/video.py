@@ -16,6 +16,7 @@ class VideoInfo:
     thumbnail_url: str
     formats: list[dict] = field(default_factory=list)
     available_resolutions: list[str] = field(default_factory=list)
+    available_subtitles: dict[str, str] = field(default_factory=dict)
 
     @property
     def duration_str(self) -> str:
