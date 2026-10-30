@@ -39,6 +39,7 @@ from app.ui.dialogs.about_dialog import AboutDialog
 from app.ui.dialogs.ffmpeg_dialog import FfmpegWarningDialog
 from app.ui.dialogs.playlist_dialog import PlaylistDialog
 from app.ui.dialogs.settings_dialog import SettingsDialog
+from app.ui.dialogs.subtitle_dialog import SubtitleDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
 from app.utils.validators import is_playlist_url
@@ -62,6 +63,9 @@ class MainWindow(QMainWindow):
         self._download_items: dict[str, DownloadItemWidget] = {}
         self._metadata_worker: MetadataWorker | None = None
         self._playlist_worker: PlaylistWorker | None = None
+        self._subtitle_langs: list[str] = []
+        self._subtitle_format: str = ""
+        self._subtitle_only: bool = False
 
         # Detect ffmpeg once at startup
         self._ffmpeg_path: str | None = find_ffmpeg()
@@ -269,6 +273,29 @@ class MainWindow(QMainWindow):
         )
         layout.addLayout(row1)
 
+        # Subtitle row
+        row_sub = QHBoxLayout()
+        row_sub.setSpacing(8)
+
+        sub_lbl = QLabel("Subtitles:")
+        sub_lbl.setFixedWidth(78)
+        row_sub.addWidget(sub_lbl)
+
+        self._subtitle_status_lbl = QLabel("None")
+        self._subtitle_status_lbl.setObjectName("infoMeta")
+        row_sub.addWidget(self._subtitle_status_lbl)
+
+        row_sub.addSpacerItem(
+            QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        )
+
+        self._subtitle_btn = QPushButton("Configure\u2026")
+        self._subtitle_btn.setObjectName("iconButton")
+        self._subtitle_btn.setFixedWidth(96)
+        self._subtitle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        row_sub.addWidget(self._subtitle_btn)
+        layout.addLayout(row_sub)
+
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
@@ -377,6 +404,7 @@ class MainWindow(QMainWindow):
         # Download options toolbar
         self._browse_btn.clicked.connect(self._on_browse)
         self._download_btn.clicked.connect(self._on_download_clicked)
+        self._subtitle_btn.clicked.connect(self._on_subtitle_configure)
 
         # App-level
         self._theme_btn.clicked.connect(self._on_toggle_theme)
@@ -446,6 +474,12 @@ class MainWindow(QMainWindow):
         self._video_info_widget.show_info(video_info)
         self._info_card.setVisible(True)
         self._url_input.set_loading(False)
+
+        # Reset subtitle state for the new video
+        self._subtitle_langs = []
+        self._subtitle_format = ""
+        self._subtitle_only = False
+        self._subtitle_status_lbl.setText("None")
 
         # Populate the resolution combo with whatever this video actually offers
         self._resolution_combo.clear()
@@ -533,6 +567,31 @@ class MainWindow(QMainWindow):
     # Slot handlers — download
     # ------------------------------------------------------------------
 
+    def _on_subtitle_configure(self) -> None:
+        """Open the SubtitleDialog for the user to configure subtitle options."""
+        dialog = SubtitleDialog(self._video_info, parent=self)
+        dialog.subtitle_options_set.connect(self._on_subtitle_options_set)
+        dialog.exec()
+
+    def _on_subtitle_options_set(
+        self,
+        langs: list,
+        fmt: str,
+        subtitle_only: bool,
+    ) -> None:
+        """Store subtitle settings and update the status label."""
+        self._subtitle_langs = langs
+        self._subtitle_format = fmt
+        self._subtitle_only = subtitle_only
+
+        if not langs:
+            self._subtitle_status_lbl.setText("None")
+        else:
+            status = f"{', '.join(langs).upper()} \u00b7 {fmt.upper()}"
+            if subtitle_only:
+                status += " (subtitle only)"
+            self._subtitle_status_lbl.setText(status)
+
     def _on_browse(self) -> None:
         current = self._save_path_input.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
@@ -571,6 +630,9 @@ class MainWindow(QMainWindow):
             resolution=resolution,
             format=fmt,
             save_path=save_path,
+            subtitle_langs=self._subtitle_langs,
+            subtitle_format=self._subtitle_format,
+            subtitle_only=self._subtitle_only,
         )
 
         # Hand ownership to the manager and add the UI item
