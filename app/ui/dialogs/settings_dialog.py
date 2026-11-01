@@ -87,6 +87,14 @@ class SettingsDialog(QDialog):
         self._notify_check = QCheckBox("Notify when download completes")
         form.addRow("", self._notify_check)
 
+        # Clipboard detection
+        self._clipboard_check = QCheckBox("Auto-detect YouTube URLs from clipboard on focus")
+        form.addRow("", self._clipboard_check)
+
+        # Clipboard auto-fill mode
+        self._autofill_check = QCheckBox("Auto-fill silently (no confirmation banner)")
+        form.addRow("", self._autofill_check)
+
         root.addLayout(form)
 
         # OK / Cancel
@@ -128,6 +136,8 @@ class SettingsDialog(QDialog):
         self._notify_check.setChecked(
             bool(self._config.get("notify_on_complete"))
         )
+        self._clipboard_check.setChecked(bool(self._config.get("clipboard_detection")))
+        self._autofill_check.setChecked(bool(self._config.get("clipboard_auto_fill")))
 
     def _on_browse(self) -> None:
         current = self._path_edit.text() or str(Path.home() / "Downloads")
@@ -156,6 +166,8 @@ class SettingsDialog(QDialog):
         new_theme = self._theme_combo.currentText().lower()
         self._config.set("theme", new_theme)
         self._config.set("notify_on_complete", self._notify_check.isChecked())
+        self._config.set("clipboard_detection", self._clipboard_check.isChecked())
+        self._config.set("clipboard_auto_fill", self._autofill_check.isChecked())
         self._config.save()
 
         self.settings_changed.emit()
