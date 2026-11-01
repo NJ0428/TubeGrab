@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -31,6 +31,7 @@ from app.core.ffmpeg import find_ffmpeg
 from app.models.download_task import DownloadTask
 from app.models.playlist import PlaylistInfo
 from app.models.video import VideoInfo
+from app.ui.components.clipboard_banner import ClipboardBanner
 from app.ui.components.download_item import DownloadItemWidget
 from app.ui.components.progress_card import ProgressCardWidget
 from app.ui.components.url_input import UrlInputWidget
@@ -42,7 +43,7 @@ from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.ui.dialogs.subtitle_dialog import SubtitleDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
-from app.utils.validators import is_playlist_url
+from app.utils.validators import is_playlist_url, is_valid_url
 from app.workers.metadata_worker import MetadataWorker
 from app.workers.playlist_worker import PlaylistWorker
 
@@ -66,6 +67,7 @@ class MainWindow(QMainWindow):
         self._subtitle_langs: list[str] = []
         self._subtitle_format: str = ""
         self._subtitle_only: bool = False
+        self._last_clipboard_url: str = ""  # tracks last detected URL to avoid repeat prompts
 
         # Detect ffmpeg once at startup
         self._ffmpeg_path: str | None = find_ffmpeg()
@@ -133,6 +135,11 @@ class MainWindow(QMainWindow):
         self._url_input = UrlInputWidget()
         url_card_layout.addWidget(self._url_input)
         content_layout.addWidget(url_card)
+
+        # Clipboard detection banner (hidden by default)
+        self._clipboard_banner = ClipboardBanner("", parent=content_widget)
+        self._clipboard_banner.setVisible(False)
+        content_layout.addWidget(self._clipboard_banner)
 
         # Video info
         info_card = QFrame()
@@ -398,6 +405,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _connect_signals(self) -> None:
+        # Clipboard banner
+        self._clipboard_banner.use_requested.connect(self._on_clipboard_use)
+        self._clipboard_banner.dismissed.connect(self._on_clipboard_dismiss)
+
         # URL / metadata
         self._url_input.fetch_requested.connect(self._on_fetch_requested)
 
@@ -844,6 +855,48 @@ class MainWindow(QMainWindow):
 
         self._theme_btn.setText("☀ Light" if theme == "dark" else "☾ Dark")
         logger.debug("Theme applied: %s", theme)
+
+    # ------------------------------------------------------------------
+    # Clipboard detection
+    # ------------------------------------------------------------------
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self._check_clipboard()
+
+    def _check_clipboard(self) -> None:
+        """Check the clipboard for a YouTube URL and act according to settings."""
+        if not self._config.get("clipboard_detection"):
+            return
+        clipboard = QApplication.clipboard()
+        text = clipboard.text().strip()
+        if not text or not is_valid_url(text):
+            return
+        # Don't re-prompt for the same URL or a URL already in the input
+        if text == self._last_clipboard_url:
+            return
+        if text == self._url_input.current_url():
+            return
+        self._last_clipboard_url = text
+        if self._config.get("clipboard_auto_fill"):
+            # Silent auto-fill: set the URL directly
+            self._url_input._url_edit.setText(text)
+            self._status_bar.showMessage("URL auto-filled from clipboard.", 3000)
+        else:
+            # Show confirmation banner
+            self._clipboard_banner.set_url(text)
+            self._clipboard_banner.setVisible(True)
+
+    def _on_clipboard_use(self, url: str) -> None:
+        """Slot: user accepted the clipboard URL from the banner."""
+        self._clipboard_banner.setVisible(False)
+        self._url_input._url_edit.setText(url)
+        self._status_bar.showMessage("URL loaded from clipboard.", 3000)
+
+    def _on_clipboard_dismiss(self) -> None:
+        """Slot: user dismissed the clipboard banner."""
+        self._clipboard_banner.setVisible(False)
 
     # ------------------------------------------------------------------
     # Window events
