@@ -22,6 +22,8 @@ _DEFAULTS: dict[str, Any] = {
     "max_concurrent_downloads": 3,
     "theme": "dark",
     "notify_on_complete": True,
+    "clipboard_detection": True,   # auto-detect YouTube URLs from clipboard on focus
+    "clipboard_auto_fill": False,  # True = auto-fill silently, False = show confirmation banner
 }
 
 
