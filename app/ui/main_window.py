@@ -28,8 +28,10 @@ from PySide6.QtWidgets import (
 
 from app.core.download_manager import DownloadManager
 from app.core.ffmpeg import find_ffmpeg
+from app.core.history import HistoryManager
 from app.models.download_task import DownloadTask
 from app.models.playlist import PlaylistInfo
+from app.models.history_entry import HistoryEntry
 from app.models.video import VideoInfo
 from app.ui.components.clipboard_banner import ClipboardBanner
 from app.ui.components.download_item import DownloadItemWidget
@@ -38,6 +40,7 @@ from app.ui.components.url_input import UrlInputWidget
 from app.ui.components.video_info import VideoInfoWidget
 from app.ui.dialogs.about_dialog import AboutDialog
 from app.ui.dialogs.ffmpeg_dialog import FfmpegWarningDialog
+from app.ui.dialogs.history_dialog import HistoryDialog
 from app.ui.dialogs.playlist_dialog import PlaylistDialog
 from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.ui.dialogs.subtitle_dialog import SubtitleDialog
@@ -59,6 +62,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._config = config or Config()
         self._config.load()
+        self._history_manager = HistoryManager()
+        self._history_manager.load()
         self._current_theme: str = self._config.get("theme") or "dark"
         self._video_info: VideoInfo | None = None
         self._download_items: dict[str, DownloadItemWidget] = {}
@@ -208,6 +213,13 @@ class MainWindow(QMainWindow):
         layout.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
+
+        self._history_btn = QPushButton("🕐 History")
+        self._history_btn.setObjectName("iconButton")
+        self._history_btn.setToolTip("View download history")
+        self._history_btn.setFixedHeight(32)
+        self._history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addWidget(self._history_btn)
 
         self._theme_btn = QPushButton("☀ Light")
         self._theme_btn.setObjectName("iconButton")
@@ -418,6 +430,7 @@ class MainWindow(QMainWindow):
         self._subtitle_btn.clicked.connect(self._on_subtitle_configure)
 
         # App-level
+        self._history_btn.clicked.connect(self._on_history)
         self._theme_btn.clicked.connect(self._on_toggle_theme)
         self._about_btn.clicked.connect(self._on_about)
         self._settings_btn.clicked.connect(self._on_settings)
@@ -711,6 +724,13 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"Download complete: {title}", 6000)
         logger.info("Download finished — task_id=%s file_path=%s", task_id, file_path)
 
+        # Record to history
+        task = self._download_manager.get_task(task_id)
+        if task is not None and task.status == "completed":
+            entry: HistoryEntry = HistoryManager.entry_from_task(task)
+            self._history_manager.add(entry)
+            logger.debug("History entry recorded — task_id=%s", task_id)
+
     def _on_download_error_from_manager(self, task_id: str, msg: str) -> None:
         """Slot: a download failed (non-cancellation error)."""
         task = self._download_manager.get_task(task_id)
@@ -774,6 +794,28 @@ class MainWindow(QMainWindow):
         default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
         self._save_path_input.setText(default_path)
         logger.debug("Settings reloaded into main window")
+
+    def _on_history(self) -> None:
+        """Open the HistoryDialog."""
+        dialog = HistoryDialog(self._history_manager, parent=self)
+        dialog.redownload_requested.connect(self._on_history_redownload)
+        dialog.exec()
+
+    def _on_history_redownload(
+        self, url: str, resolution: str, fmt: str, save_path: str
+    ) -> None:
+        """Slot: user requested a re-download from the history dialog."""
+        vi = VideoInfo(url=url, title=url, channel="", duration=0, thumbnail_url="")
+        task = DownloadTask(
+            video_info=vi,
+            resolution=resolution,
+            format=fmt,
+            save_path=save_path,
+        )
+        self._download_manager.add_task(task)
+        self.add_download_item(task)
+        self._status_bar.showMessage(f"Re-download queued: {url[:60]}", 4000)
+        logger.info("Re-download queued from history — url=%s", url)
 
     def _on_about(self) -> None:
         """Open the About dialog."""
