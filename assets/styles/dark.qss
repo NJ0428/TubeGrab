@@ -433,3 +433,218 @@ QMenu::separator {
     background-color: #0f3460;
     margin: 4px 8px;
 }
+
+/* ── QDialog ─────────────────────────────────────────────── */
+QDialog {
+    background-color: #1a1a2e;
+    border-radius: 10px;
+}
+
+QDialog QLabel {
+    color: #e0e0e0;
+}
+
+/* ── QSpinBox ────────────────────────────────────────────── */
+QSpinBox {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 6px 10px;
+    selection-background-color: #e94560;
+    selection-color: #ffffff;
+    min-height: 28px;
+}
+
+QSpinBox:focus {
+    border: 1px solid #e94560;
+    background-color: #1a2550;
+}
+
+QSpinBox:disabled {
+    background-color: #12192e;
+    color: #4a4a6e;
+    border-color: #1a1a3e;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button {
+    background-color: #0f3460;
+    border: none;
+    width: 18px;
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {
+    background-color: #1a4a80;
+}
+
+/* ── QPushButton#clearBtn ────────────────────────────────── */
+QPushButton#clearBtn {
+    background-color: transparent;
+    border: 1px solid #2a2a4e;
+    color: #6a6a8e;
+    padding: 3px 10px;
+    font-size: 11px;
+    border-radius: 4px;
+    min-height: 22px;
+}
+
+QPushButton#clearBtn:hover {
+    background-color: #1a1a3e;
+    border-color: #4a4a6e;
+    color: #a0a0b0;
+}
+
+QPushButton#clearBtn:pressed {
+    background-color: #0f0f2e;
+}
+
+/* ── URL validity indicator labels ──────────────────────── */
+QLabel#urlValidValid {
+    color: #4caf50;
+}
+
+QLabel#urlValidInvalid {
+    color: #e94560;
+}
+
+/* ── Playlist indicator ──────────────────────────────── */
+QLabel#urlValidPlaylist {
+    color: #64b5f6;
+}
+
+/* ── QTableWidget (playlist dialog) ─────────────────── */
+QTableWidget {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    gridline-color: #0f3460;
+    selection-background-color: #0f3460;
+    selection-color: #ffffff;
+    outline: none;
+}
+
+QTableWidget::item {
+    padding: 4px 8px;
+}
+
+QTableWidget::item:selected {
+    background-color: #1a4a80;
+}
+
+QTableWidget::item:alternate {
+    background-color: #1a2550;
+}
+
+QHeaderView::section {
+    background-color: #0f3460;
+    color: #a0a0b0;
+    border: none;
+    border-right: 1px solid #1a4a80;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QHeaderView::section:last {
+    border-right: none;
+}
+
+/* ── QListWidget (subtitle language selector) ────────── */
+QListWidget {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    outline: none;
+    padding: 2px;
+}
+
+QListWidget::item {
+    padding: 5px 10px;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QListWidget::item:selected {
+    background-color: #e94560;
+    color: #ffffff;
+}
+
+QListWidget::item:hover {
+    background-color: #0f3460;
+}
+
+/* ── Clipboard detection banner ──────────────────────── */
+QFrame#clipboardBanner {
+    background-color: #0f2a4a;
+    border: 1px solid #1a4a80;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+QLabel#clipboardUrl {
+    color: #64b5f6;
+    font-weight: 600;
+}
+
+/* ── History dialog search input ─────────────────────── */
+QLineEdit#searchInput {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 5px 10px;
+    min-height: 28px;
+}
+
+QLineEdit#searchInput:focus {
+    border-color: #e94560;
+}
+
+QLineEdit#dateInput {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 5px 8px;
+    min-height: 28px;
+}
+
+QLineEdit#dateInput:focus {
+    border-color: #e94560;
+}
+
+/* ── Batch URL input text area ───────────────────────── */
+QTextEdit#batchUrlInput {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 8px;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 12px;
+    selection-background-color: #e94560;
+    selection-color: #ffffff;
+}
+
+QTextEdit#batchUrlInput:focus {
+    border-color: #e94560;
+}
+
+/* ── Filename template input ─────────────────────────── */
+QLineEdit#templateInput {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 5px 10px;
+    min-height: 28px;
+    font-family: "Consolas", "Courier New", monospace;
+}
+
+QLineEdit#templateInput:focus {
+    border-color: #e94560;
+}

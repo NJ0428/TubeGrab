@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Callable
 
 from app.models.download_task import DownloadTask
+from app.utils.filename_template import render_template
 from app.utils.logger import get_logger
 from app.utils.validators import sanitize_filename
 
@@ -57,8 +58,17 @@ class Downloader:
             ) from exc
 
         fmt_string = self._build_format_string(task.resolution, task.format)
-        sanitized_title = sanitize_filename(task.video_info.title)
-        outtmpl = f"{task.save_path}/{sanitized_title}.%(ext)s"
+        template = getattr(task, "filename_template", None) or "{title}"
+        rendered_name = render_template(
+            template=template,
+            title=task.video_info.title,
+            channel=task.video_info.channel,
+            resolution=task.resolution,
+            ext=task.format,
+            task_id=task.task_id,
+        )
+        sanitized_title = rendered_name  # keep for fallback path below
+        outtmpl = f"{task.save_path}/{rendered_name}.%(ext)s"
 
         # We need a mutable container so the hook closure can store the path
         result_container: dict = {"filepath": ""}

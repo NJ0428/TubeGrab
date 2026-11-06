@@ -28,6 +28,7 @@ class DownloadTask:
     subtitle_langs: list[str] = field(default_factory=list)  # e.g. ["ko", "en"]
     subtitle_format: str = ""                                  # "srt" or "vtt"
     subtitle_only: bool = False                                # download subtitle without video
+    filename_template: str = ""   # empty = use app default from config
 
     @property
     def total_bytes_str(self) -> str:
