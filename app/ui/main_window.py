@@ -39,6 +39,7 @@ from app.ui.components.progress_card import ProgressCardWidget
 from app.ui.components.url_input import UrlInputWidget
 from app.ui.components.video_info import VideoInfoWidget
 from app.ui.dialogs.about_dialog import AboutDialog
+from app.ui.dialogs.batch_dialog import BatchDialog
 from app.ui.dialogs.ffmpeg_dialog import FfmpegWarningDialog
 from app.ui.dialogs.history_dialog import HistoryDialog
 from app.ui.dialogs.playlist_dialog import PlaylistDialog
@@ -220,6 +221,13 @@ class MainWindow(QMainWindow):
         self._history_btn.setFixedHeight(32)
         self._history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._history_btn)
+
+        self._batch_btn = QPushButton("⊞ Batch")
+        self._batch_btn.setObjectName("iconButton")
+        self._batch_btn.setToolTip("Add multiple URLs at once")
+        self._batch_btn.setFixedHeight(32)
+        self._batch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addWidget(self._batch_btn)
 
         self._theme_btn = QPushButton("☀ Light")
         self._theme_btn.setObjectName("iconButton")
@@ -431,6 +439,7 @@ class MainWindow(QMainWindow):
 
         # App-level
         self._history_btn.clicked.connect(self._on_history)
+        self._batch_btn.clicked.connect(self._on_batch)
         self._theme_btn.clicked.connect(self._on_toggle_theme)
         self._about_btn.clicked.connect(self._on_about)
         self._settings_btn.clicked.connect(self._on_settings)
@@ -574,6 +583,7 @@ class MainWindow(QMainWindow):
                 resolution=resolution,
                 format=fmt_lower,
                 save_path=save_path,
+                filename_template=self._config.get("filename_template") or "",
             )
             self._download_manager.add_task(task)
             self.add_download_item(task)
@@ -657,6 +667,7 @@ class MainWindow(QMainWindow):
             subtitle_langs=self._subtitle_langs,
             subtitle_format=self._subtitle_format,
             subtitle_only=self._subtitle_only,
+            filename_template=self._config.get("filename_template") or "",
         )
 
         # Hand ownership to the manager and add the UI item
@@ -811,11 +822,56 @@ class MainWindow(QMainWindow):
             resolution=resolution,
             format=fmt,
             save_path=save_path,
+            filename_template=self._config.get("filename_template") or "",
         )
         self._download_manager.add_task(task)
         self.add_download_item(task)
         self._status_bar.showMessage(f"Re-download queued: {url[:60]}", 4000)
         logger.info("Re-download queued from history — url=%s", url)
+
+    def _on_batch(self) -> None:
+        """Open the BatchDialog for multi-URL input."""
+        dialog = BatchDialog(self._config, parent=self)
+        dialog.batch_download_requested.connect(self._on_batch_download_requested)
+        dialog.exec()
+
+    def _on_batch_download_requested(
+        self,
+        urls: list,
+        resolution: str,
+        fmt: str,
+        save_path: str,
+    ) -> None:
+        """Slot: user confirmed batch download — queue all valid URLs."""
+        fmt_lower = fmt.lower()
+        for url in urls:
+            vi = VideoInfo(
+                url=url,
+                title=url,
+                channel="",
+                duration=0,
+                thumbnail_url="",
+            )
+            task = DownloadTask(
+                video_info=vi,
+                resolution=resolution,
+                format=fmt_lower,
+                save_path=save_path,
+                filename_template=self._config.get("filename_template") or "",
+            )
+            self._download_manager.add_task(task)
+            self.add_download_item(task)
+
+        count = len(urls)
+        self._status_bar.showMessage(
+            f"Batch: {count} URL{'s' if count != 1 else ''} added to queue.", 5000
+        )
+        logger.info(
+            "Batch download queued — count=%d resolution=%s format=%s",
+            count,
+            resolution,
+            fmt_lower,
+        )
 
     def _on_about(self) -> None:
         """Open the About dialog."""
