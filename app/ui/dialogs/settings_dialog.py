@@ -95,6 +95,52 @@ class SettingsDialog(QDialog):
         self._autofill_check = QCheckBox("Auto-fill silently (no confirmation banner)")
         form.addRow("", self._autofill_check)
 
+        # ── Filename Template ─────────────────────────────────────────
+        template_lbl = QLabel("── Filename Template ──")
+        template_lbl.setObjectName("sectionLabel")
+        form.addRow(template_lbl)
+
+        # Template input + preview + error stacked in a column
+        template_row = QVBoxLayout()
+        template_row.setSpacing(4)
+
+        self._template_edit = QLineEdit()
+        self._template_edit.setPlaceholderText("{title}")
+        self._template_edit.setObjectName("templateInput")
+        self._template_edit.textChanged.connect(self._on_template_changed)
+        template_row.addWidget(self._template_edit)
+
+        self._template_preview_lbl = QLabel("")
+        self._template_preview_lbl.setObjectName("infoMeta")
+        template_row.addWidget(self._template_preview_lbl)
+
+        self._template_error_lbl = QLabel("")
+        self._template_error_lbl.setObjectName("urlValidInvalid")
+        template_row.addWidget(self._template_error_lbl)
+
+        template_widget = QWidget()
+        template_widget.setLayout(template_row)
+        form.addRow(QLabel("Template:"), template_widget)
+
+        # Quick-insert variable buttons
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(4)
+        hint_lbl = QLabel("Insert:")
+        hint_lbl.setObjectName("infoMeta")
+        hint_row.addWidget(hint_lbl)
+        for var in ("{title}", "{channel}", "{resolution}", "{date}", "{ext}"):
+            btn = QPushButton(var)
+            btn.setObjectName("clearBtn")
+            btn.setFixedHeight(22)
+            btn.clicked.connect(
+                lambda checked=False, v=var: self._insert_template_var(v)
+            )
+            hint_row.addWidget(btn)
+        hint_row.addStretch(1)
+        hint_widget = QWidget()
+        hint_widget.setLayout(hint_row)
+        form.addRow("", hint_widget)
+
         root.addLayout(form)
 
         # OK / Cancel
@@ -139,6 +185,44 @@ class SettingsDialog(QDialog):
         self._clipboard_check.setChecked(bool(self._config.get("clipboard_detection")))
         self._autofill_check.setChecked(bool(self._config.get("clipboard_auto_fill")))
 
+        self._template_edit.setText(
+            self._config.get("filename_template") or ""
+        )
+        self._on_template_changed(self._template_edit.text())
+
+    def _on_template_changed(self, text: str) -> None:
+        """Update preview and error labels whenever the template text changes."""
+        from app.utils.filename_template import (
+            DEFAULT_TEMPLATE,
+            render_template,
+            validate_template,
+        )
+
+        template = text.strip() or DEFAULT_TEMPLATE
+        is_valid, err = validate_template(template)
+        if not is_valid:
+            self._template_error_lbl.setText(err)
+            self._template_preview_lbl.setText("")
+        else:
+            self._template_error_lbl.setText("")
+            preview = render_template(
+                template=template,
+                title="My Awesome Video",
+                channel="Some Channel",
+                resolution="1080p",
+                ext="mp4",
+                task_id="abcd1234",
+            )
+            self._template_preview_lbl.setText(f"Preview: {preview}.mp4")
+
+    def _insert_template_var(self, var: str) -> None:
+        """Insert *var* at the current cursor position in the template input."""
+        cursor_pos = self._template_edit.cursorPosition()
+        current = self._template_edit.text()
+        new_text = current[:cursor_pos] + var + current[cursor_pos:]
+        self._template_edit.setText(new_text)
+        self._template_edit.setCursorPosition(cursor_pos + len(var))
+
     def _on_browse(self) -> None:
         current = self._path_edit.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
@@ -168,6 +252,7 @@ class SettingsDialog(QDialog):
         self._config.set("notify_on_complete", self._notify_check.isChecked())
         self._config.set("clipboard_detection", self._clipboard_check.isChecked())
         self._config.set("clipboard_auto_fill", self._autofill_check.isChecked())
+        self._config.set("filename_template", self._template_edit.text().strip())
         self._config.save()
 
         self.settings_changed.emit()
