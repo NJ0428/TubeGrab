@@ -57,12 +57,18 @@ class DownloadManager(QObject):
         self._tasks: dict[str, DownloadTask] = {}
         self._workers: dict[str, DownloadWorker] = {}
         self._queue: list[str] = []
+        self._paused: bool = False
 
         logger.debug("DownloadManager initialised (max_concurrent=%d)", self.max_concurrent)
 
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
+
+    @property
+    def paused(self) -> bool:
+        """Whether the download queue is currently paused."""
+        return self._paused
 
     @property
     def max_concurrent(self) -> int:
@@ -164,6 +170,17 @@ class DownloadManager(QObject):
         """Return a snapshot list of all tasks in insertion order."""
         return list(self._tasks.values())
 
+    def pause(self) -> None:
+        """Prevent new downloads from starting."""
+        self._paused = True
+        logger.info("Download queue paused")
+
+    def resume(self) -> None:
+        """Allow downloads to start again and immediately try to fill slots."""
+        self._paused = False
+        logger.info("Download queue resumed")
+        self._try_start_next()
+
     def cancel_all(self) -> None:
         """Cancel every active worker and discard the pending queue."""
         logger.info(
@@ -192,6 +209,8 @@ class DownloadManager(QObject):
 
     def _try_start_next(self) -> None:
         """Start as many queued tasks as the concurrency limit allows."""
+        if self._paused:
+            return
         while self.active_count < self.max_concurrent and self._queue:
             task_id = self._queue.pop(0)
             task = self._tasks.get(task_id)
