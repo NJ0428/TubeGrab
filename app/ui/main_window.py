@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QStatusBar,
+    QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
@@ -44,6 +45,7 @@ from app.ui.dialogs.ffmpeg_dialog import FfmpegWarningDialog
 from app.ui.dialogs.history_dialog import HistoryDialog
 from app.ui.dialogs.playlist_dialog import PlaylistDialog
 from app.ui.dialogs.settings_dialog import SettingsDialog
+from app.ui.tray_icon import TrayIcon
 from app.ui.dialogs.subtitle_dialog import SubtitleDialog
 from app.utils.config import Config
 from app.utils.logger import get_logger
@@ -87,6 +89,15 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._connect_signals()
+
+        # System tray
+        self._tray_icon = TrayIcon(parent=self)
+        self._tray_icon.show_window_requested.connect(self._on_tray_show)
+        self._tray_icon.exit_requested.connect(self._on_tray_exit)
+        self._tray_icon.pause_requested.connect(self._on_tray_pause)
+        self._tray_icon.resume_requested.connect(self._on_tray_resume)
+        self._tray_icon.show()
+        self._force_quit: bool = False  # True when tray Exit is clicked
 
         if self._ffmpeg_path:
             logger.info("ffmpeg detected at: %s", self._ffmpeg_path)
@@ -742,6 +753,10 @@ class MainWindow(QMainWindow):
             self._history_manager.add(entry)
             logger.debug("History entry recorded — task_id=%s", task_id)
 
+        if self._config.get("tray_notifications") and not self.isActiveWindow():
+            video_title = task.video_info.title if task else task_id
+            self._tray_icon.show_download_notification(video_title)
+
     def _on_download_error_from_manager(self, task_id: str, msg: str) -> None:
         """Slot: a download failed (non-cancellation error)."""
         task = self._download_manager.get_task(task_id)
@@ -752,6 +767,11 @@ class MainWindow(QMainWindow):
 
         self._status_bar.showMessage(f"Download failed: {msg}", 8000)
         logger.error("Download failed — task_id=%s error=%s", task_id, msg)
+
+        if self._config.get("tray_notifications") and not self.isActiveWindow():
+            task = self._download_manager.get_task(task_id)
+            if task is not None:
+                self._tray_icon.show_error_notification(task.video_info.title, msg)
 
     def _on_download_cancelled(self, task_id: str) -> None:
         """Slot: a download was cancelled."""
@@ -776,6 +796,8 @@ class MainWindow(QMainWindow):
                 f"Downloading {active} file(s) — {pending} queued", 0
             )
 
+        self._tray_icon.update_badge(active, paused=self._download_manager.paused)
+
     def _on_open_file(self, file_path: str) -> None:
         import subprocess
         import sys
@@ -789,6 +811,31 @@ class MainWindow(QMainWindow):
                 subprocess.Popen(["xdg-open", str(Path(file_path).parent)])
         except OSError as exc:
             logger.error("Failed to open file location: %s", exc)
+
+    def _on_tray_show(self) -> None:
+        """Restore window from tray."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _on_tray_exit(self) -> None:
+        """Exit from tray menu — cancel downloads and quit."""
+        self._force_quit = True
+        self.close()
+
+    def _on_tray_pause(self) -> None:
+        """Pause the download queue via the tray menu."""
+        self._download_manager.pause()
+        self._tray_icon.update_badge(self._download_manager.active_count, paused=True)
+        self._status_bar.showMessage("Downloads paused.", 3000)
+        logger.info("Downloads paused via tray")
+
+    def _on_tray_resume(self) -> None:
+        """Resume the download queue via the tray menu."""
+        self._download_manager.resume()
+        self._tray_icon.update_badge(self._download_manager.active_count, paused=False)
+        self._status_bar.showMessage("Downloads resumed.", 3000)
+        logger.info("Downloads resumed via tray")
 
     def _on_toggle_theme(self) -> None:
         new_theme = "light" if self._current_theme == "dark" else "dark"
@@ -1001,12 +1048,25 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        logger.info("TubeGrab shutting down — cancelling all downloads")
+        # Minimize to tray unless force-quit or tray not available
+        if (
+            not self._force_quit
+            and self._config.get("minimize_to_tray")
+            and QSystemTrayIcon.isSystemTrayAvailable()
+        ):
+            event.ignore()
+            self.hide()
+            self._tray_icon.showMessage(
+                "TubeGrab",
+                "TubeGrab is running in the background.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
+            )
+            return
 
-        # Cancel all downloads through the manager
+        logger.info("TubeGrab shutting down — cancelling all downloads")
         self._download_manager.cancel_all()
 
-        # Give active workers a moment to stop cleanly
         for worker in list(self._download_manager._workers.values()):
             if worker.isRunning():
                 worker.quit()
@@ -1016,15 +1076,13 @@ class MainWindow(QMainWindow):
                     worker.terminate()
                     worker.wait(2000)
 
-        # Stop any in-flight metadata worker
         if self._metadata_worker is not None and self._metadata_worker.isRunning():
             self._metadata_worker.quit()
             self._metadata_worker.wait(3000)
 
-        # Stop any in-flight playlist worker
         if self._playlist_worker is not None and self._playlist_worker.isRunning():
             self._playlist_worker.quit()
             self._playlist_worker.wait(3000)
 
-        logger.info("All workers stopped — goodbye")
-        super().closeEvent(event)
+        self._tray_icon.hide()
+        event.accept()
