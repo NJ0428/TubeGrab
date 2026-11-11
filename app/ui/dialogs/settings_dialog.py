@@ -95,6 +95,14 @@ class SettingsDialog(QDialog):
         self._autofill_check = QCheckBox("Auto-fill silently (no confirmation banner)")
         form.addRow("", self._autofill_check)
 
+        # Minimize to tray
+        self._tray_check = QCheckBox("Minimize to tray on close (instead of quitting)")
+        form.addRow("", self._tray_check)
+
+        # Tray notifications
+        self._tray_notify_check = QCheckBox("Show tray notification on download complete")
+        form.addRow("", self._tray_notify_check)
+
         # ── Filename Template ─────────────────────────────────────────
         template_lbl = QLabel("── Filename Template ──")
         template_lbl.setObjectName("sectionLabel")
@@ -184,6 +192,8 @@ class SettingsDialog(QDialog):
         )
         self._clipboard_check.setChecked(bool(self._config.get("clipboard_detection")))
         self._autofill_check.setChecked(bool(self._config.get("clipboard_auto_fill")))
+        self._tray_check.setChecked(bool(self._config.get("minimize_to_tray")))
+        self._tray_notify_check.setChecked(bool(self._config.get("tray_notifications")))
 
         self._template_edit.setText(
             self._config.get("filename_template") or ""
@@ -252,6 +262,8 @@ class SettingsDialog(QDialog):
         self._config.set("notify_on_complete", self._notify_check.isChecked())
         self._config.set("clipboard_detection", self._clipboard_check.isChecked())
         self._config.set("clipboard_auto_fill", self._autofill_check.isChecked())
+        self._config.set("minimize_to_tray", self._tray_check.isChecked())
+        self._config.set("tray_notifications", self._tray_notify_check.isChecked())
         self._config.set("filename_template", self._template_edit.text().strip())
         self._config.save()
 
