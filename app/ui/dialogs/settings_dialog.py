@@ -149,6 +149,36 @@ class SettingsDialog(QDialog):
         hint_widget.setLayout(hint_row)
         form.addRow("", hint_widget)
 
+        # ── yt-dlp ────────────────────────────────────────────────────
+        ytdlp_lbl = QLabel("── yt-dlp ──")
+        ytdlp_lbl.setObjectName("sectionLabel")
+        form.addRow(ytdlp_lbl)
+
+        # Current version display
+        self._ytdlp_version_lbl = QLabel("\u2026")
+        self._ytdlp_version_lbl.setObjectName("infoMeta")
+        form.addRow(QLabel("Installed version:"), self._ytdlp_version_lbl)
+
+        # Auto-update checkbox
+        self._auto_update_check = QCheckBox("Automatically update yt-dlp on startup")
+        form.addRow("", self._auto_update_check)
+
+        # Manual update button row
+        update_row = QHBoxLayout()
+        update_row.setSpacing(8)
+        self._update_btn = QPushButton("Update Now")
+        self._update_btn.setObjectName("fetchButton")
+        self._update_btn.setFixedWidth(120)
+        self._update_btn.clicked.connect(self._on_update_now)
+        update_row.addWidget(self._update_btn)
+        self._update_status_lbl = QLabel("")
+        self._update_status_lbl.setObjectName("infoMeta")
+        update_row.addWidget(self._update_status_lbl)
+        update_row.addStretch(1)
+        update_widget = QWidget()
+        update_widget.setLayout(update_row)
+        form.addRow("", update_widget)
+
         root.addLayout(form)
 
         # OK / Cancel
@@ -199,6 +229,10 @@ class SettingsDialog(QDialog):
             self._config.get("filename_template") or ""
         )
         self._on_template_changed(self._template_edit.text())
+
+        from app.core.updater import get_ytdlp_version
+        self._ytdlp_version_lbl.setText(get_ytdlp_version())
+        self._auto_update_check.setChecked(bool(self._config.get("auto_update_ytdlp")))
 
     def _on_template_changed(self, text: str) -> None:
         """Update preview and error labels whenever the template text changes."""
@@ -265,6 +299,7 @@ class SettingsDialog(QDialog):
         self._config.set("minimize_to_tray", self._tray_check.isChecked())
         self._config.set("tray_notifications", self._tray_notify_check.isChecked())
         self._config.set("filename_template", self._template_edit.text().strip())
+        self._config.set("auto_update_ytdlp", self._auto_update_check.isChecked())
         self._config.save()
 
         self.settings_changed.emit()
@@ -272,3 +307,31 @@ class SettingsDialog(QDialog):
             self.theme_changed.emit(new_theme)
 
         self.accept()
+
+    def _on_update_now(self) -> None:
+        """Start a manual yt-dlp update in the background."""
+        from app.workers.update_worker import UpdateWorker
+        self._update_btn.setEnabled(False)
+        self._update_status_lbl.setText("Updating\u2026")
+        worker = UpdateWorker(auto_update=True, parent=self)
+        worker.update_finished.connect(self._on_update_result)
+        worker.error.connect(lambda msg: self._on_update_result_error(msg))
+        # Keep reference to avoid GC
+        self._update_worker = worker
+        worker.start()
+
+    def _on_update_result(self, result: object) -> None:
+        """Handle the UpdateResult emitted by UpdateWorker."""
+        from app.core.updater import UpdateResult
+        r: UpdateResult = result  # type: ignore[assignment]
+        self._update_btn.setEnabled(True)
+        if r.success:
+            self._update_status_lbl.setText(r.message)
+            self._ytdlp_version_lbl.setText(r.new_version)
+        else:
+            self._update_status_lbl.setText(f"Failed: {r.message[:80]}")
+
+    def _on_update_result_error(self, msg: str) -> None:
+        """Handle unexpected worker errors."""
+        self._update_btn.setEnabled(True)
+        self._update_status_lbl.setText(f"Error: {msg[:80]}")
