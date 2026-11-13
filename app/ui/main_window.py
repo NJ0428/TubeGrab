@@ -29,6 +29,8 @@ from PySide6.QtWidgets import (
 
 from app.core.download_manager import DownloadManager
 from app.core.ffmpeg import find_ffmpeg
+from app.core.updater import get_ytdlp_version  # noqa: F401 — used in type hints / runtime
+from app.workers.update_worker import UpdateWorker
 from app.core.history import HistoryManager
 from app.models.download_task import DownloadTask
 from app.models.playlist import PlaylistInfo
@@ -98,6 +100,11 @@ class MainWindow(QMainWindow):
         self._tray_icon.resume_requested.connect(self._on_tray_resume)
         self._tray_icon.show()
         self._force_quit: bool = False  # True when tray Exit is clicked
+
+        self._update_worker: UpdateWorker | None = None
+        # Schedule startup update check after window is shown (2s delay)
+        if self._config.get("auto_update_ytdlp"):
+            QTimer.singleShot(2000, self._check_ytdlp_update)
 
         if self._ffmpeg_path:
             logger.info("ffmpeg detected at: %s", self._ffmpeg_path)
@@ -1044,6 +1051,46 @@ class MainWindow(QMainWindow):
         self._clipboard_banner.setVisible(False)
 
     # ------------------------------------------------------------------
+    # yt-dlp auto-update
+    # ------------------------------------------------------------------
+
+    def _check_ytdlp_update(self) -> None:
+        """Run yt-dlp version check + auto-update in the background."""
+        auto_update = bool(self._config.get("auto_update_ytdlp"))
+        worker = UpdateWorker(auto_update=auto_update, parent=self)
+        worker.version_checked.connect(self._on_ytdlp_version_checked)
+        worker.update_finished.connect(self._on_ytdlp_update_finished)
+        self._update_worker = worker
+        worker.start()
+        logger.info("yt-dlp update check started (auto_update=%s)", auto_update)
+
+    def _on_ytdlp_version_checked(self, current: str, latest: str) -> None:
+        """Slot: called once the PyPI version check completes."""
+        if latest and latest != current:
+            self._status_bar.showMessage(
+                f"yt-dlp update available: {current} \u2192 {latest} (updating\u2026)", 5000
+            )
+            logger.info("yt-dlp update available: %s \u2192 %s", current, latest)
+        else:
+            logger.info("yt-dlp is up to date (%s)", current)
+
+    def _on_ytdlp_update_finished(self, result: object) -> None:
+        """Slot: called when the update worker finishes."""
+        from app.core.updater import UpdateResult
+        r: UpdateResult = result  # type: ignore[assignment]
+        if r.updated:
+            self._status_bar.showMessage(r.message, 6000)
+            if self._config.get("tray_notifications"):
+                self._tray_icon.showMessage(
+                    "TubeGrab",
+                    r.message,
+                    QSystemTrayIcon.MessageIcon.Information,
+                    4000,
+                )
+        elif not r.success:
+            logger.warning("yt-dlp auto-update failed: %s", r.message)
+
+    # ------------------------------------------------------------------
     # Window events
     # ------------------------------------------------------------------
 
@@ -1083,6 +1130,10 @@ class MainWindow(QMainWindow):
         if self._playlist_worker is not None and self._playlist_worker.isRunning():
             self._playlist_worker.quit()
             self._playlist_worker.wait(3000)
+
+        if self._update_worker is not None and self._update_worker.isRunning():
+            self._update_worker.quit()
+            self._update_worker.wait(5000)
 
         self._tray_icon.hide()
         event.accept()
