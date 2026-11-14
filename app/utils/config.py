@@ -27,6 +27,7 @@ _DEFAULTS: dict[str, Any] = {
     "filename_template": "{title}",
     "minimize_to_tray": True,
     "tray_notifications": True,
+    "auto_update_ytdlp": True,     # check and update yt-dlp on startup
 }
 
 
