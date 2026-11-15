@@ -14,13 +14,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.utils.i18n import tr
+
 
 class AboutDialog(QDialog):
     """Minimal about dialog displaying TubeGrab application information."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("About TubeGrab")
+        self.setWindowTitle(tr("About TubeGrab (title)"))
         self.setMinimumWidth(340)
         self.setModal(True)
         self._build_ui()
@@ -45,7 +47,7 @@ class AboutDialog(QDialog):
         layout.addWidget(name_lbl)
 
         # Version
-        version_lbl = QLabel("Version 1.0.0")
+        version_lbl = QLabel(tr("Version 1.0.0"))
         version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_lbl.setObjectName("infoMeta")
         layout.addWidget(version_lbl)
@@ -53,7 +55,7 @@ class AboutDialog(QDialog):
         layout.addSpacing(6)
 
         # Description
-        desc_lbl = QLabel("A fast, modern YouTube downloader")
+        desc_lbl = QLabel(tr("A fast, modern YouTube downloader"))
         desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(desc_lbl)
 
@@ -71,7 +73,7 @@ class AboutDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(tr("Close"))
         close_btn.setFixedWidth(100)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self.accept)

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.utils.i18n import tr
 from app.utils.validators import is_playlist_url, is_valid_url, is_valid_youtube_url
 
 
@@ -38,20 +39,20 @@ class UrlInputWidget(QWidget):
 
         self._url_edit = QLineEdit()
         self._url_edit.setObjectName("urlLineEdit")
-        self._url_edit.setPlaceholderText("Enter YouTube URL…")
+        self._url_edit.setPlaceholderText(tr("Enter YouTube URL…"))
         self._url_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         input_row.addWidget(self._url_edit)
 
-        self._paste_btn = QPushButton("Paste")
+        self._paste_btn = QPushButton(tr("Paste"))
         self._paste_btn.setObjectName("pasteBtn")
-        self._paste_btn.setToolTip("Paste URL from clipboard")
+        self._paste_btn.setToolTip(tr("Paste URL from clipboard"))
         self._paste_btn.setFixedWidth(64)
         self._paste_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         input_row.addWidget(self._paste_btn)
 
-        self._fetch_btn = QPushButton("Fetch Info")
+        self._fetch_btn = QPushButton(tr("Fetch Info"))
         self._fetch_btn.setObjectName("fetchBtn")
-        self._fetch_btn.setToolTip("Fetch video information")
+        self._fetch_btn.setToolTip(tr("Fetch video information"))
         self._fetch_btn.setFixedWidth(100)
         self._fetch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._fetch_btn.setEnabled(False)
@@ -93,15 +94,15 @@ class UrlInputWidget(QWidget):
 
         if stripped:
             if valid_video and not playlist:
-                self._valid_indicator.setText("✔ Valid URL")
+                self._valid_indicator.setText(tr("✔ Valid URL"))
                 self._valid_indicator.setObjectName("urlValidValid")
                 self._valid_indicator.setStyleSheet("")
             elif playlist:
-                self._valid_indicator.setText("↳ Playlist detected")
+                self._valid_indicator.setText(tr("↳ Playlist detected"))
                 self._valid_indicator.setObjectName("urlValidPlaylist")
                 self._valid_indicator.setStyleSheet("")
             else:
-                self._valid_indicator.setText("✘ Invalid URL")
+                self._valid_indicator.setText(tr("✘ Invalid URL"))
                 self._valid_indicator.setObjectName("urlValidInvalid")
                 self._valid_indicator.setStyleSheet("")
         else:
@@ -133,3 +134,13 @@ class UrlInputWidget(QWidget):
     def current_url(self) -> str:
         """Return the current URL text."""
         return self._url_edit.text().strip()
+
+    def retranslate_ui(self) -> None:
+        """Update all translatable text for the active language."""
+        self._url_edit.setPlaceholderText(tr("Enter YouTube URL…"))
+        self._paste_btn.setText(tr("Paste"))
+        self._paste_btn.setToolTip(tr("Paste URL from clipboard"))
+        self._fetch_btn.setText(tr("Fetch Info"))
+        self._fetch_btn.setToolTip(tr("Fetch video information"))
+        # Refresh the validity indicator text
+        self._on_text_changed(self._url_edit.text())
