@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.models.download_task import DownloadTask
+from app.utils.i18n import tr
 
 
 class DownloadItemWidget(QFrame):
@@ -88,14 +89,14 @@ class DownloadItemWidget(QFrame):
         btn_col.setSpacing(4)
         btn_col.setContentsMargins(0, 0, 0, 0)
 
-        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn = QPushButton(tr("Cancel"))
         self._cancel_btn.setObjectName("iconButton")
         self._cancel_btn.setFixedWidth(64)
         self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cancel_btn.clicked.connect(lambda: self.cancel_requested.emit(self._task_id))
         btn_col.addWidget(self._cancel_btn)
 
-        self._open_btn = QPushButton("Open File")
+        self._open_btn = QPushButton(tr("Open File"))
         self._open_btn.setObjectName("iconButton")
         self._open_btn.setFixedWidth(64)
         self._open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -103,7 +104,7 @@ class DownloadItemWidget(QFrame):
         self._open_btn.setVisible(False)
         btn_col.addWidget(self._open_btn)
 
-        self._retry_btn = QPushButton("Retry")
+        self._retry_btn = QPushButton(tr("Retry"))
         self._retry_btn.setObjectName("iconButton")
         self._retry_btn.setFixedWidth(64)
         self._retry_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -124,14 +125,15 @@ class DownloadItemWidget(QFrame):
         self._progress_bar.setValue(int(task.progress))
 
         self._speed_lbl.setText(task.speed or "")
-        self._eta_lbl.setText(f"ETA: {task.eta}" if task.eta else "")
+        self._eta_lbl.setText(tr("ETA: {}").format(task.eta) if task.eta else "")
 
         if task.downloaded_bytes > 0:
             self._size_lbl.setText(f"{_fmt_bytes(task.downloaded_bytes)} / {task.total_bytes_str}")
         else:
             self._size_lbl.setText("")
 
-        self._status_lbl.setText(task.status.capitalize())
+        status_key = task.status.capitalize()
+        self._status_lbl.setText(tr(status_key))
 
         is_active = task.status in ("pending", "downloading")
         is_done = task.status == "completed"
@@ -148,6 +150,12 @@ class DownloadItemWidget(QFrame):
             self._status_lbl.setToolTip(task.error_message)
 
         self._task_id = task.task_id
+
+    def retranslate_ui(self) -> None:
+        """Update static button labels for the active language."""
+        self._cancel_btn.setText(tr("Cancel"))
+        self._open_btn.setText(tr("Open File"))
+        self._retry_btn.setText(tr("Retry"))
 
     def set_thumbnail(self, pixmap: QPixmap) -> None:
         scaled = pixmap.scaled(
