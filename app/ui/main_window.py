@@ -50,6 +50,7 @@ from app.ui.dialogs.settings_dialog import SettingsDialog
 from app.ui.tray_icon import TrayIcon
 from app.ui.dialogs.subtitle_dialog import SubtitleDialog
 from app.utils.config import Config
+from app.utils.i18n import set_language, tr
 from app.utils.logger import get_logger
 from app.utils.validators import is_playlist_url, is_valid_url
 from app.workers.metadata_worker import MetadataWorker
@@ -152,9 +153,9 @@ class MainWindow(QMainWindow):
         url_card_layout.setContentsMargins(14, 12, 14, 12)
         url_card_layout.setSpacing(8)
 
-        section_lbl = QLabel("VIDEO URL")
-        section_lbl.setObjectName("sectionLabel")
-        url_card_layout.addWidget(section_lbl)
+        self._video_url_lbl = QLabel(tr("VIDEO URL"))
+        self._video_url_lbl.setObjectName("sectionLabel")
+        url_card_layout.addWidget(self._video_url_lbl)
 
         self._url_input = UrlInputWidget()
         url_card_layout.addWidget(self._url_input)
@@ -206,11 +207,11 @@ class MainWindow(QMainWindow):
 
         if self._ffmpeg_path is None:
             self._status_bar.showMessage(
-                "Warning: ffmpeg not found — audio extraction may fail.", 8000
+                tr("Warning: ffmpeg not found — audio extraction may fail."), 8000
             )
             QTimer.singleShot(500, self._show_ffmpeg_warning)
         else:
-            self._status_bar.showMessage("Ready")
+            self._status_bar.showMessage(tr("Ready"))
 
     def _build_top_bar(self) -> QWidget:
         top_bar = QWidget()
@@ -233,37 +234,37 @@ class MainWindow(QMainWindow):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        self._history_btn = QPushButton("🕐 History")
+        self._history_btn = QPushButton(tr("🕐 History"))
         self._history_btn.setObjectName("iconButton")
-        self._history_btn.setToolTip("View download history")
+        self._history_btn.setToolTip(tr("View download history"))
         self._history_btn.setFixedHeight(32)
         self._history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._history_btn)
 
-        self._batch_btn = QPushButton("⊞ Batch")
+        self._batch_btn = QPushButton(tr("⊞ Batch"))
         self._batch_btn.setObjectName("iconButton")
-        self._batch_btn.setToolTip("Add multiple URLs at once")
+        self._batch_btn.setToolTip(tr("Add multiple URLs at once"))
         self._batch_btn.setFixedHeight(32)
         self._batch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._batch_btn)
 
-        self._theme_btn = QPushButton("☀ Light")
+        self._theme_btn = QPushButton(tr("☀ Light"))
         self._theme_btn.setObjectName("iconButton")
-        self._theme_btn.setToolTip("Toggle light / dark theme")
+        self._theme_btn.setToolTip(tr("Toggle light / dark theme"))
         self._theme_btn.setFixedHeight(32)
         self._theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._theme_btn)
 
-        self._about_btn = QPushButton("ℹ About")
+        self._about_btn = QPushButton(tr("ℹ About"))
         self._about_btn.setObjectName("iconButton")
-        self._about_btn.setToolTip("About TubeGrab")
+        self._about_btn.setToolTip(tr("About TubeGrab"))
         self._about_btn.setFixedHeight(32)
         self._about_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._about_btn)
 
-        self._settings_btn = QPushButton("⚙ Settings")
+        self._settings_btn = QPushButton(tr("⚙ Settings"))
         self._settings_btn.setObjectName("iconButton")
-        self._settings_btn.setToolTip("Open settings")
+        self._settings_btn.setToolTip(tr("Open settings"))
         self._settings_btn.setFixedHeight(32)
         self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self._settings_btn)
@@ -278,16 +279,16 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(10)
 
-        section_lbl = QLabel("DOWNLOAD OPTIONS")
-        section_lbl.setObjectName("sectionLabel")
-        layout.addWidget(section_lbl)
+        self._dl_options_lbl = QLabel(tr("DOWNLOAD OPTIONS"))
+        self._dl_options_lbl.setObjectName("sectionLabel")
+        layout.addWidget(self._dl_options_lbl)
 
         row1 = QHBoxLayout()
         row1.setSpacing(12)
 
-        res_lbl = QLabel("Resolution:")
-        res_lbl.setFixedWidth(78)
-        row1.addWidget(res_lbl)
+        self._res_lbl = QLabel(tr("Resolution:"))
+        self._res_lbl.setFixedWidth(78)
+        row1.addWidget(self._res_lbl)
 
         self._resolution_combo = QComboBox()
         self._resolution_combo.setObjectName("resolutionCombo")
@@ -302,9 +303,9 @@ class MainWindow(QMainWindow):
             QSpacerItem(20, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
         )
 
-        fmt_lbl = QLabel("Format:")
-        fmt_lbl.setFixedWidth(52)
-        row1.addWidget(fmt_lbl)
+        self._fmt_lbl = QLabel(tr("Format:"))
+        self._fmt_lbl.setFixedWidth(52)
+        row1.addWidget(self._fmt_lbl)
 
         self._format_combo = QComboBox()
         self._format_combo.setObjectName("formatCombo")
@@ -322,11 +323,11 @@ class MainWindow(QMainWindow):
         row_sub = QHBoxLayout()
         row_sub.setSpacing(8)
 
-        sub_lbl = QLabel("Subtitles:")
-        sub_lbl.setFixedWidth(78)
-        row_sub.addWidget(sub_lbl)
+        self._sub_lbl = QLabel(tr("Subtitles:"))
+        self._sub_lbl.setFixedWidth(78)
+        row_sub.addWidget(self._sub_lbl)
 
-        self._subtitle_status_lbl = QLabel("None")
+        self._subtitle_status_lbl = QLabel(tr("None"))
         self._subtitle_status_lbl.setObjectName("infoMeta")
         row_sub.addWidget(self._subtitle_status_lbl)
 
@@ -334,7 +335,7 @@ class MainWindow(QMainWindow):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        self._subtitle_btn = QPushButton("Configure\u2026")
+        self._subtitle_btn = QPushButton(tr("Configure\u2026"))
         self._subtitle_btn.setObjectName("iconButton")
         self._subtitle_btn.setFixedWidth(96)
         self._subtitle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -344,20 +345,20 @@ class MainWindow(QMainWindow):
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
-        path_lbl = QLabel("Save to:")
-        path_lbl.setFixedWidth(52)
-        row2.addWidget(path_lbl)
+        self._save_path_lbl = QLabel(tr("Save to:"))
+        self._save_path_lbl.setFixedWidth(52)
+        row2.addWidget(self._save_path_lbl)
 
         self._save_path_input = QLineEdit()
         self._save_path_input.setObjectName("savePathInput")
-        self._save_path_input.setPlaceholderText("Select download folder…")
+        self._save_path_input.setPlaceholderText(tr("Select download folder…"))
         default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
         self._save_path_input.setText(default_path)
         row2.addWidget(self._save_path_input)
 
-        self._browse_btn = QPushButton("Browse…")
+        self._browse_btn = QPushButton(tr("Browse…"))
         self._browse_btn.setObjectName("iconButton")
-        self._browse_btn.setToolTip("Choose download folder")
+        self._browse_btn.setToolTip(tr("Choose download folder"))
         self._browse_btn.setFixedWidth(80)
         self._browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         row2.addWidget(self._browse_btn)
@@ -369,9 +370,9 @@ class MainWindow(QMainWindow):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        self._download_btn = QPushButton("⬇  Download")
+        self._download_btn = QPushButton(tr("⬇  Download"))
         self._download_btn.setObjectName("downloadButton")
-        self._download_btn.setToolTip("Start downloading the video")
+        self._download_btn.setToolTip(tr("Start downloading the video"))
         self._download_btn.setFixedWidth(200)
         self._download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         row3.addWidget(self._download_btn)
@@ -395,17 +396,17 @@ class MainWindow(QMainWindow):
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(8)
 
-        header_lbl = QLabel("DOWNLOADS")
-        header_lbl.setObjectName("sectionLabel")
-        header_row.addWidget(header_lbl)
+        self._downloads_hdr_lbl = QLabel(tr("DOWNLOADS"))
+        self._downloads_hdr_lbl.setObjectName("sectionLabel")
+        header_row.addWidget(self._downloads_hdr_lbl)
 
         header_row.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        self._clear_btn = QPushButton("Clear Completed")
+        self._clear_btn = QPushButton(tr("Clear Completed"))
         self._clear_btn.setObjectName("clearBtn")
-        self._clear_btn.setToolTip("Remove completed, failed, and cancelled items")
+        self._clear_btn.setToolTip(tr("Remove completed, failed, and cancelled items"))
         self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._clear_btn.setFixedHeight(26)
         self._clear_btn.clicked.connect(self._on_clear_completed)
@@ -428,7 +429,7 @@ class MainWindow(QMainWindow):
         self._download_list_layout.setSpacing(4)
         self._download_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self._empty_lbl = QLabel("No downloads yet. Paste a URL above to get started.")
+        self._empty_lbl = QLabel(tr("No downloads yet. Paste a URL above to get started."))
         self._empty_lbl.setObjectName("infoMeta")
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._download_list_layout.addWidget(self._empty_lbl)
@@ -491,7 +492,7 @@ class MainWindow(QMainWindow):
             self._metadata_worker = None
 
         self._url_input.set_loading(True)
-        self._status_bar.showMessage(f"Fetching info for: {url} …")
+        self._status_bar.showMessage(tr("Fetching info for: {} …").format(url))
 
         worker = MetadataWorker(url, parent=self)
         worker.finished.connect(self._on_metadata_finished)
@@ -510,7 +511,7 @@ class MainWindow(QMainWindow):
             self._playlist_worker = None
 
         self._url_input.set_loading(True)
-        self._status_bar.showMessage("Fetching playlist info…")
+        self._status_bar.showMessage(tr("Fetching playlist info…"))
 
         worker = PlaylistWorker(url, parent=self)
         worker.finished.connect(self._on_playlist_finished)
@@ -530,7 +531,7 @@ class MainWindow(QMainWindow):
         self._subtitle_langs = []
         self._subtitle_format = ""
         self._subtitle_only = False
-        self._subtitle_status_lbl.setText("None")
+        self._subtitle_status_lbl.setText(tr("None"))
 
         # Populate the resolution combo with whatever this video actually offers
         self._resolution_combo.clear()
@@ -542,14 +543,14 @@ class MainWindow(QMainWindow):
             )
 
         self._status_bar.showMessage(
-            f"Ready — {video_info.title[:70]}", 6000
+            tr("Ready — {}").format(video_info.title[:70]), 6000
         )
         logger.info("Metadata displayed for: %s", video_info.title)
 
     def _on_metadata_error(self, msg: str) -> None:
         """Slot: metadata fetch failed."""
         self._url_input.set_loading(False)
-        self._status_bar.showMessage(f"Error: {msg}", 8000)
+        self._status_bar.showMessage(tr("Error: {}").format(msg), 8000)
         logger.warning("Metadata fetch error: %s", msg)
 
     # ------------------------------------------------------------------
@@ -558,7 +559,9 @@ class MainWindow(QMainWindow):
 
     def _on_playlist_progress(self, current: int, total: int) -> None:
         """Slot: update status bar while playlist entries are being fetched."""
-        self._status_bar.showMessage(f"Fetching playlist: {current}/{total} videos…")
+        self._status_bar.showMessage(
+            tr("Fetching playlist: {}/{} videos…").format(current, total)
+        )
 
     def _on_playlist_finished(self, playlist_info: PlaylistInfo) -> None:
         """Slot: playlist metadata fetched successfully — open the selection dialog."""
@@ -576,7 +579,7 @@ class MainWindow(QMainWindow):
     def _on_playlist_error(self, msg: str) -> None:
         """Slot: playlist fetch failed."""
         self._url_input.set_loading(False)
-        self._status_bar.showMessage(f"Playlist error: {msg}", 8000)
+        self._status_bar.showMessage(tr("Playlist error: {}").format(msg), 8000)
         logger.warning("Playlist fetch error: %s", msg)
 
     def _on_playlist_download_requested(
@@ -606,7 +609,9 @@ class MainWindow(QMainWindow):
             self._download_manager.add_task(task)
             self.add_download_item(task)
 
-        self._status_bar.showMessage(f"Queued {len(urls)} videos for download")
+        self._status_bar.showMessage(
+            tr("Queued {} videos for download").format(len(urls))
+        )
         logger.info(
             "Queued %d playlist videos — resolution=%s format=%s path=%s",
             len(urls),
@@ -637,18 +642,18 @@ class MainWindow(QMainWindow):
         self._subtitle_only = subtitle_only
 
         if not langs:
-            self._subtitle_status_lbl.setText("None")
+            self._subtitle_status_lbl.setText(tr("None"))
         else:
             status = f"{', '.join(langs).upper()} \u00b7 {fmt.upper()}"
             if subtitle_only:
-                status += " (subtitle only)"
+                status += tr(" (subtitle only)")
             self._subtitle_status_lbl.setText(status)
 
     def _on_browse(self) -> None:
         current = self._save_path_input.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Select Download Folder",
+            tr("Select Download Folder"),
             current,
             QFileDialog.Option.ShowDirsOnly,
         )
@@ -662,7 +667,7 @@ class MainWindow(QMainWindow):
         """Queue a download via DownloadManager when the Download button is pressed."""
         url = self._url_input.current_url()
         if not url:
-            self._status_bar.showMessage("Please enter a URL first.", 3000)
+            self._status_bar.showMessage(tr("Please enter a URL first."), 3000)
             return
 
         video = self._video_info or VideoInfo(
@@ -701,14 +706,14 @@ class MainWindow(QMainWindow):
         """Slot: user clicked Cancel on a DownloadItemWidget."""
         logger.info("Cancel requested via UI — task_id=%s", task_id)
         self._download_manager.cancel_task(task_id)
-        self._status_bar.showMessage("Cancelling download…", 3000)
+        self._status_bar.showMessage(tr("Cancelling download…"), 3000)
 
     def _on_retry_download(self, task_id: str) -> None:
         """Re-queue a failed/cancelled download through the manager."""
         task = self._download_manager.get_task(task_id)
         if task is None:
             logger.warning("Retry requested but task not found: %s", task_id)
-            self._status_bar.showMessage("Could not retry: task not found.", 3000)
+            self._status_bar.showMessage(tr("Could not retry: task not found."), 3000)
             return
 
         self._download_manager.retry_task(task_id)
@@ -718,7 +723,7 @@ class MainWindow(QMainWindow):
         if item is not None:
             item.update_task(task)
 
-        self._status_bar.showMessage("Retrying download…", 3000)
+        self._status_bar.showMessage(tr("Retrying download…"), 3000)
         logger.info("Retry requested for task: %s", task_id)
 
     def _on_download_progress(
@@ -750,7 +755,7 @@ class MainWindow(QMainWindow):
         else:
             title = task_id
 
-        self._status_bar.showMessage(f"Download complete: {title}", 6000)
+        self._status_bar.showMessage(tr("Download complete: {}").format(title), 6000)
         logger.info("Download finished — task_id=%s file_path=%s", task_id, file_path)
 
         # Record to history
@@ -772,7 +777,7 @@ class MainWindow(QMainWindow):
             if item is not None:
                 item.update_task(task)
 
-        self._status_bar.showMessage(f"Download failed: {msg}", 8000)
+        self._status_bar.showMessage(tr("Download failed: {}").format(msg), 8000)
         logger.error("Download failed — task_id=%s error=%s", task_id, msg)
 
         if self._config.get("tray_notifications") and not self.isActiveWindow():
@@ -788,7 +793,7 @@ class MainWindow(QMainWindow):
             if item is not None:
                 item.update_task(task)
 
-        self._status_bar.showMessage("Download cancelled.", 4000)
+        self._status_bar.showMessage(tr("Download cancelled."), 4000)
         logger.info("Download cancelled — task_id=%s", task_id)
 
     def _on_queue_changed(self, total: int, active: int, pending: int) -> None:
@@ -800,7 +805,7 @@ class MainWindow(QMainWindow):
 
         if active > 0:
             self._status_bar.showMessage(
-                f"Downloading {active} file(s) — {pending} queued", 0
+                tr("Downloading {} file(s) — {} queued").format(active, pending), 0
             )
 
         self._tray_icon.update_badge(active, paused=self._download_manager.paused)
@@ -834,14 +839,14 @@ class MainWindow(QMainWindow):
         """Pause the download queue via the tray menu."""
         self._download_manager.pause()
         self._tray_icon.update_badge(self._download_manager.active_count, paused=True)
-        self._status_bar.showMessage("Downloads paused.", 3000)
+        self._status_bar.showMessage(tr("Downloads paused."), 3000)
         logger.info("Downloads paused via tray")
 
     def _on_tray_resume(self) -> None:
         """Resume the download queue via the tray menu."""
         self._download_manager.resume()
         self._tray_icon.update_badge(self._download_manager.active_count, paused=False)
-        self._status_bar.showMessage("Downloads resumed.", 3000)
+        self._status_bar.showMessage(tr("Downloads resumed."), 3000)
         logger.info("Downloads resumed via tray")
 
     def _on_toggle_theme(self) -> None:
@@ -853,12 +858,19 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self._config, parent=self)
         dialog.settings_changed.connect(self._on_settings_changed)
         dialog.theme_changed.connect(self.load_theme)
+        dialog.language_changed.connect(self._on_language_changed)
         dialog.exec()
 
     def _on_settings_changed(self) -> None:
         default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
         self._save_path_input.setText(default_path)
         logger.debug("Settings reloaded into main window")
+
+    def _on_language_changed(self, lang: str) -> None:
+        """Apply a new UI language and retranslate all visible persistent widgets."""
+        set_language(lang)
+        self._retranslate_ui()
+        logger.info("Language changed to: %s", lang)
 
     def _on_history(self) -> None:
         """Open the HistoryDialog."""
@@ -880,7 +892,7 @@ class MainWindow(QMainWindow):
         )
         self._download_manager.add_task(task)
         self.add_download_item(task)
-        self._status_bar.showMessage(f"Re-download queued: {url[:60]}", 4000)
+        self._status_bar.showMessage(tr("Re-download queued: {}").format(url[:60]), 4000)
         logger.info("Re-download queued from history — url=%s", url)
 
     def _on_batch(self) -> None:
@@ -917,9 +929,8 @@ class MainWindow(QMainWindow):
             self.add_download_item(task)
 
         count = len(urls)
-        self._status_bar.showMessage(
-            f"Batch: {count} URL{'s' if count != 1 else ''} added to queue.", 5000
-        )
+        key = "Batch: {} URL added to queue." if count == 1 else "Batch: {} URLs added to queue."
+        self._status_bar.showMessage(tr(key).format(count), 5000)
         logger.info(
             "Batch download queued — count=%d resolution=%s format=%s",
             count,
@@ -981,6 +992,64 @@ class MainWindow(QMainWindow):
         self._on_queue_changed(total, active, pending)
 
     # ------------------------------------------------------------------
+    # Retranslation
+    # ------------------------------------------------------------------
+
+    def _retranslate_ui(self) -> None:
+        """Update all persistent UI text to the currently active language."""
+        # Top bar buttons
+        self._history_btn.setText(tr("🕐 History"))
+        self._history_btn.setToolTip(tr("View download history"))
+        self._batch_btn.setText(tr("⊞ Batch"))
+        self._batch_btn.setToolTip(tr("Add multiple URLs at once"))
+        self._theme_btn.setToolTip(tr("Toggle light / dark theme"))
+        self._about_btn.setText(tr("ℹ About"))
+        self._about_btn.setToolTip(tr("About TubeGrab"))
+        self._settings_btn.setText(tr("⚙ Settings"))
+        self._settings_btn.setToolTip(tr("Open settings"))
+
+        # Update theme button text based on current theme
+        self._theme_btn.setText(
+            tr("☀ Light") if self._current_theme == "dark" else tr("☾ Dark")
+        )
+
+        # Main sections
+        self._video_url_lbl.setText(tr("VIDEO URL"))
+        self._dl_options_lbl.setText(tr("DOWNLOAD OPTIONS"))
+        self._res_lbl.setText(tr("Resolution:"))
+        self._fmt_lbl.setText(tr("Format:"))
+        self._sub_lbl.setText(tr("Subtitles:"))
+        self._subtitle_btn.setText(tr("Configure\u2026"))
+        self._save_path_lbl.setText(tr("Save to:"))
+        self._save_path_input.setPlaceholderText(tr("Select download folder…"))
+        self._browse_btn.setText(tr("Browse…"))
+        self._browse_btn.setToolTip(tr("Choose download folder"))
+        self._download_btn.setText(tr("⬇  Download"))
+        self._download_btn.setToolTip(tr("Start downloading the video"))
+
+        # Download list
+        self._downloads_hdr_lbl.setText(tr("DOWNLOADS"))
+        self._clear_btn.setText(tr("Clear Completed"))
+        self._clear_btn.setToolTip(tr("Remove completed, failed, and cancelled items"))
+        self._empty_lbl.setText(
+            tr("No downloads yet. Paste a URL above to get started.")
+        )
+
+        # Subtitle status — only update if currently showing "None"
+        if self._subtitle_status_lbl.text() in ("None", "없음"):
+            self._subtitle_status_lbl.setText(tr("None"))
+
+        # Sub-widgets
+        self._url_input.retranslate_ui()
+        self._clipboard_banner.retranslate_ui()
+        self._progress_card.retranslate_ui()
+        self._tray_icon.retranslate_ui()
+
+        # Download items
+        for item in self._download_items.values():
+            item.retranslate_ui()
+
+    # ------------------------------------------------------------------
     # Theme management
     # ------------------------------------------------------------------
 
@@ -1005,7 +1074,7 @@ class MainWindow(QMainWindow):
         self._config.set("theme", theme)
         self._config.save()
 
-        self._theme_btn.setText("☀ Light" if theme == "dark" else "☾ Dark")
+        self._theme_btn.setText(tr("☀ Light") if theme == "dark" else tr("☾ Dark"))
         logger.debug("Theme applied: %s", theme)
 
     # ------------------------------------------------------------------
@@ -1034,7 +1103,7 @@ class MainWindow(QMainWindow):
         if self._config.get("clipboard_auto_fill"):
             # Silent auto-fill: set the URL directly
             self._url_input._url_edit.setText(text)
-            self._status_bar.showMessage("URL auto-filled from clipboard.", 3000)
+            self._status_bar.showMessage(tr("URL auto-filled from clipboard."), 3000)
         else:
             # Show confirmation banner
             self._clipboard_banner.set_url(text)
@@ -1044,7 +1113,7 @@ class MainWindow(QMainWindow):
         """Slot: user accepted the clipboard URL from the banner."""
         self._clipboard_banner.setVisible(False)
         self._url_input._url_edit.setText(url)
-        self._status_bar.showMessage("URL loaded from clipboard.", 3000)
+        self._status_bar.showMessage(tr("URL loaded from clipboard."), 3000)
 
     def _on_clipboard_dismiss(self) -> None:
         """Slot: user dismissed the clipboard banner."""
@@ -1068,9 +1137,10 @@ class MainWindow(QMainWindow):
         """Slot: called once the PyPI version check completes."""
         if latest and latest != current:
             self._status_bar.showMessage(
-                f"yt-dlp update available: {current} \u2192 {latest} (updating\u2026)", 5000
+                tr("yt-dlp update available: {} → {} (updating…)").format(current, latest),
+                5000,
             )
-            logger.info("yt-dlp update available: %s \u2192 %s", current, latest)
+            logger.info("yt-dlp update available: %s → %s", current, latest)
         else:
             logger.info("yt-dlp is up to date (%s)", current)
 
@@ -1105,7 +1175,7 @@ class MainWindow(QMainWindow):
             self.hide()
             self._tray_icon.showMessage(
                 "TubeGrab",
-                "TubeGrab is running in the background.",
+                tr("TubeGrab is running in the background."),
                 QSystemTrayIcon.MessageIcon.Information,
                 2000,
             )

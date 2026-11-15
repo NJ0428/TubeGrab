@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.utils.i18n import tr
+
 
 class ClipboardBanner(QFrame):
     """A compact dismissible banner shown when a YouTube URL is detected in the clipboard.
@@ -49,9 +51,9 @@ class ClipboardBanner(QFrame):
         layout.addWidget(icon_lbl)
 
         # Descriptive label
-        desc_lbl = QLabel("YouTube URL detected in clipboard:")
-        desc_lbl.setObjectName("infoMeta")
-        layout.addWidget(desc_lbl)
+        self._desc_lbl = QLabel(tr("YouTube URL detected in clipboard:"))
+        self._desc_lbl.setObjectName("infoMeta")
+        layout.addWidget(self._desc_lbl)
 
         # URL label (truncated, bold, accent colour via QSS objectName)
         self._url_label = QLabel("")
@@ -59,7 +61,7 @@ class ClipboardBanner(QFrame):
         layout.addWidget(self._url_label, stretch=1)
 
         # "Use This URL" button
-        self._use_btn = QPushButton("Use This URL")
+        self._use_btn = QPushButton(tr("Use This URL"))
         self._use_btn.setObjectName("fetchButton")
         self._use_btn.setFixedHeight(32)
         self._use_btn.clicked.connect(self._on_use_clicked)
@@ -69,7 +71,7 @@ class ClipboardBanner(QFrame):
         self._dismiss_btn = QPushButton("\u2715")  # ✕
         self._dismiss_btn.setObjectName("iconButton")
         self._dismiss_btn.setFixedSize(32, 32)
-        self._dismiss_btn.setToolTip("Dismiss")
+        self._dismiss_btn.setToolTip(tr("Dismiss"))
         self._dismiss_btn.clicked.connect(self._on_dismiss_clicked)
         layout.addWidget(self._dismiss_btn)
 
@@ -82,6 +84,12 @@ class ClipboardBanner(QFrame):
         self._url = url
         self._url_label.setText(self._truncate(url))
         self.setVisible(True)
+
+    def retranslate_ui(self) -> None:
+        """Update all translatable text for the active language."""
+        self._desc_lbl.setText(tr("YouTube URL detected in clipboard:"))
+        self._use_btn.setText(tr("Use This URL"))
+        self._dismiss_btn.setToolTip(tr("Dismiss"))
 
     # ------------------------------------------------------------------
     # Private helpers

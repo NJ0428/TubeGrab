@@ -8,6 +8,8 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from app.utils.i18n import tr
+
 
 class TrayIcon(QSystemTrayIcon):
     """Manages the system tray icon, context menu, badge overlays, and toast notifications.
@@ -98,26 +100,26 @@ class TrayIcon(QSystemTrayIcon):
         """Create and attach the tray context menu."""
         self._menu = QMenu()
 
-        self._show_action = QAction("Show Window")
+        self._show_action = QAction(tr("Show Window"))
         self._show_action.triggered.connect(self.show_window_requested.emit)
         self._menu.addAction(self._show_action)
 
         self._menu.addSeparator()
 
-        self._pause_action = QAction("Pause Downloads")
+        self._pause_action = QAction(tr("Pause Downloads"))
         self._pause_action.triggered.connect(self.pause_requested.emit)
         self._menu.addAction(self._pause_action)
 
-        self._resume_action = QAction("Resume Downloads")
+        self._resume_action = QAction(tr("Resume Downloads"))
         self._resume_action.triggered.connect(self.resume_requested.emit)
         self._resume_action.setVisible(False)
         self._menu.addAction(self._resume_action)
 
         self._menu.addSeparator()
 
-        exit_action = QAction("Exit")
-        exit_action.triggered.connect(self.exit_requested.emit)
-        self._menu.addAction(exit_action)
+        self._exit_action = QAction(tr("Exit"))
+        self._exit_action.triggered.connect(self.exit_requested.emit)
+        self._menu.addAction(self._exit_action)
 
         self.setContextMenu(self._menu)
 
@@ -134,7 +136,7 @@ class TrayIcon(QSystemTrayIcon):
         """
         if active > 0:
             self.setIcon(self._build_badge_icon(active))
-            self.setToolTip(f"TubeGrab — {active} download(s) active")
+            self.setToolTip(tr("TubeGrab — {} download(s) active").format(active))
         else:
             self.setIcon(self._build_base_icon())
             self.setToolTip("TubeGrab")
@@ -154,7 +156,7 @@ class TrayIcon(QSystemTrayIcon):
         """
         self.showMessage(
             "TubeGrab",
-            f"Download complete: {title[:60]}",
+            tr("Download complete: {}").format(title[:60]),
             QSystemTrayIcon.MessageIcon.Information,
             4000,
         )
@@ -168,10 +170,17 @@ class TrayIcon(QSystemTrayIcon):
         """
         self.showMessage(
             "TubeGrab",
-            f"Download failed: {title[:40]}\n{msg[:60]}",
+            tr("Download failed: {}\n{}").format(title[:40], msg[:60]),
             QSystemTrayIcon.MessageIcon.Warning,
             5000,
         )
+
+    def retranslate_ui(self) -> None:
+        """Update all translatable menu items for the active language."""
+        self._show_action.setText(tr("Show Window"))
+        self._pause_action.setText(tr("Pause Downloads"))
+        self._resume_action.setText(tr("Resume Downloads"))
+        self._exit_action.setText(tr("Exit"))
 
     # ------------------------------------------------------------------
     # Slots
