@@ -24,16 +24,18 @@ from PySide6.QtWidgets import (
 )
 
 from app.utils.config import Config
+from app.utils.i18n import tr
 
 
 class SettingsDialog(QDialog):
     settings_changed = Signal()
     theme_changed = Signal(str)
+    language_changed = Signal(str)
 
     def __init__(self, config: Config, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._config = config
-        self.setWindowTitle("Settings")
+        self.setWindowTitle(tr("Settings"))
         self.setMinimumWidth(420)
         self._build_ui()
         self._load_values()
@@ -52,59 +54,70 @@ class SettingsDialog(QDialog):
         path_row.setSpacing(8)
         self._path_edit = QLineEdit()
         self._path_edit.setObjectName("savePathInput")
-        self._path_edit.setPlaceholderText("Select download folder…")
+        self._path_edit.setPlaceholderText(tr("Select download folder…"))
         path_row.addWidget(self._path_edit)
-        browse_btn = QPushButton("Browse…")
+        browse_btn = QPushButton(tr("Browse…"))
         browse_btn.setObjectName("iconButton")
         browse_btn.setFixedWidth(80)
         browse_btn.clicked.connect(self._on_browse)
         path_row.addWidget(browse_btn)
-        form.addRow(QLabel("Download path:"), path_row)
+        form.addRow(QLabel(tr("Download path:")), path_row)
 
         # Default resolution
         self._resolution_combo = QComboBox()
         self._resolution_combo.addItems(
             ["Best", "2160p", "1440p", "1080p", "720p", "480p", "360p"]
         )
-        form.addRow(QLabel("Default resolution:"), self._resolution_combo)
+        form.addRow(QLabel(tr("Default resolution:")), self._resolution_combo)
 
         # Default format
         self._format_combo = QComboBox()
         self._format_combo.addItems(["MP4", "WEBM", "MP3", "M4A"])
-        form.addRow(QLabel("Default format:"), self._format_combo)
+        form.addRow(QLabel(tr("Default format:")), self._format_combo)
 
         # Max concurrent downloads
         self._concurrent_spin = QSpinBox()
         self._concurrent_spin.setRange(1, 10)
-        form.addRow(QLabel("Max concurrent downloads:"), self._concurrent_spin)
+        form.addRow(QLabel(tr("Max concurrent downloads:")), self._concurrent_spin)
 
         # Theme
         self._theme_combo = QComboBox()
-        self._theme_combo.addItems(["Dark", "Light"])
-        form.addRow(QLabel("Theme:"), self._theme_combo)
+        self._theme_combo.addItems([tr("Dark"), tr("Light")])
+        form.addRow(QLabel(tr("Theme:")), self._theme_combo)
+
+        # Language
+        self._language_combo = QComboBox()
+        self._language_combo.addItems(["English", "한국어"])
+        form.addRow(QLabel(tr("Language:")), self._language_combo)
 
         # Notify on complete
-        self._notify_check = QCheckBox("Notify when download completes")
+        self._notify_check = QCheckBox(tr("Notify when download completes"))
         form.addRow("", self._notify_check)
 
         # Clipboard detection
-        self._clipboard_check = QCheckBox("Auto-detect YouTube URLs from clipboard on focus")
+        self._clipboard_check = QCheckBox(
+            tr("Auto-detect YouTube URLs from clipboard on focus")
+        )
         form.addRow("", self._clipboard_check)
 
         # Clipboard auto-fill mode
-        self._autofill_check = QCheckBox("Auto-fill silently (no confirmation banner)")
+        self._autofill_check = QCheckBox(tr("Auto-fill silently (no confirmation banner)"))
         form.addRow("", self._autofill_check)
 
         # Minimize to tray
-        self._tray_check = QCheckBox("Minimize to tray on close (instead of quitting)")
+        self._tray_check = QCheckBox(
+            tr("Minimize to tray on close (instead of quitting)")
+        )
         form.addRow("", self._tray_check)
 
         # Tray notifications
-        self._tray_notify_check = QCheckBox("Show tray notification on download complete")
+        self._tray_notify_check = QCheckBox(
+            tr("Show tray notification on download complete")
+        )
         form.addRow("", self._tray_notify_check)
 
         # ── Filename Template ─────────────────────────────────────────
-        template_lbl = QLabel("── Filename Template ──")
+        template_lbl = QLabel(tr("── Filename Template ──"))
         template_lbl.setObjectName("sectionLabel")
         form.addRow(template_lbl)
 
@@ -128,12 +141,12 @@ class SettingsDialog(QDialog):
 
         template_widget = QWidget()
         template_widget.setLayout(template_row)
-        form.addRow(QLabel("Template:"), template_widget)
+        form.addRow(QLabel(tr("Template:")), template_widget)
 
         # Quick-insert variable buttons
         hint_row = QHBoxLayout()
         hint_row.setSpacing(4)
-        hint_lbl = QLabel("Insert:")
+        hint_lbl = QLabel(tr("Insert:"))
         hint_lbl.setObjectName("infoMeta")
         hint_row.addWidget(hint_lbl)
         for var in ("{title}", "{channel}", "{resolution}", "{date}", "{ext}"):
@@ -150,23 +163,23 @@ class SettingsDialog(QDialog):
         form.addRow("", hint_widget)
 
         # ── yt-dlp ────────────────────────────────────────────────────
-        ytdlp_lbl = QLabel("── yt-dlp ──")
+        ytdlp_lbl = QLabel(tr("── yt-dlp ──"))
         ytdlp_lbl.setObjectName("sectionLabel")
         form.addRow(ytdlp_lbl)
 
         # Current version display
         self._ytdlp_version_lbl = QLabel("\u2026")
         self._ytdlp_version_lbl.setObjectName("infoMeta")
-        form.addRow(QLabel("Installed version:"), self._ytdlp_version_lbl)
+        form.addRow(QLabel(tr("Installed version:")), self._ytdlp_version_lbl)
 
         # Auto-update checkbox
-        self._auto_update_check = QCheckBox("Automatically update yt-dlp on startup")
+        self._auto_update_check = QCheckBox(tr("Automatically update yt-dlp on startup"))
         form.addRow("", self._auto_update_check)
 
         # Manual update button row
         update_row = QHBoxLayout()
         update_row.setSpacing(8)
-        self._update_btn = QPushButton("Update Now")
+        self._update_btn = QPushButton(tr("Update Now"))
         self._update_btn.setObjectName("fetchButton")
         self._update_btn.setFixedWidth(120)
         self._update_btn.clicked.connect(self._on_update_now)
@@ -213,9 +226,16 @@ class SettingsDialog(QDialog):
         )
 
         theme = (self._config.get("theme") or "dark").capitalize()
-        theme_idx = self._theme_combo.findText(theme)
+        theme_idx = self._theme_combo.findText(tr(theme))
         if theme_idx >= 0:
             self._theme_combo.setCurrentIndex(theme_idx)
+
+        # Language
+        lang = self._config.get("language") or "en"
+        lang_map = {"en": "English", "ko": "한국어"}
+        lang_idx = self._language_combo.findText(lang_map.get(lang, "English"))
+        if lang_idx >= 0:
+            self._language_combo.setCurrentIndex(lang_idx)
 
         self._notify_check.setChecked(
             bool(self._config.get("notify_on_complete"))
@@ -257,7 +277,7 @@ class SettingsDialog(QDialog):
                 ext="mp4",
                 task_id="abcd1234",
             )
-            self._template_preview_lbl.setText(f"Preview: {preview}.mp4")
+            self._template_preview_lbl.setText(tr("Preview: {}").format(f"{preview}.mp4"))
 
     def _insert_template_var(self, var: str) -> None:
         """Insert *var* at the current cursor position in the template input."""
@@ -271,7 +291,7 @@ class SettingsDialog(QDialog):
         current = self._path_edit.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Select Download Folder",
+            tr("Select Download Folder"),
             current,
             QFileDialog.Option.ShowDirsOnly,
         )
@@ -280,6 +300,7 @@ class SettingsDialog(QDialog):
 
     def _on_accept(self) -> None:
         old_theme = (self._config.get("theme") or "dark").lower()
+        old_lang = self._config.get("language") or "en"
 
         self._config.set("download_path", self._path_edit.text().strip())
         self._config.set(
@@ -291,8 +312,19 @@ class SettingsDialog(QDialog):
             self._format_combo.currentText().lower(),
         )
         self._config.set("max_concurrent_downloads", self._concurrent_spin.value())
-        new_theme = self._theme_combo.currentText().lower()
+
+        # Theme — resolve display text back to internal value
+        theme_display = self._theme_combo.currentText()
+        theme_reverse = {tr("Dark"): "dark", tr("Light"): "light"}
+        new_theme = theme_reverse.get(theme_display, theme_display.lower())
         self._config.set("theme", new_theme)
+
+        # Language
+        lang_display = self._language_combo.currentText()
+        lang_reverse = {"English": "en", "한국어": "ko"}
+        new_lang = lang_reverse.get(lang_display, "en")
+        self._config.set("language", new_lang)
+
         self._config.set("notify_on_complete", self._notify_check.isChecked())
         self._config.set("clipboard_detection", self._clipboard_check.isChecked())
         self._config.set("clipboard_auto_fill", self._autofill_check.isChecked())
@@ -305,6 +337,8 @@ class SettingsDialog(QDialog):
         self.settings_changed.emit()
         if new_theme != old_theme:
             self.theme_changed.emit(new_theme)
+        if new_lang != old_lang:
+            self.language_changed.emit(new_lang)
 
         self.accept()
 
@@ -312,7 +346,7 @@ class SettingsDialog(QDialog):
         """Start a manual yt-dlp update in the background."""
         from app.workers.update_worker import UpdateWorker
         self._update_btn.setEnabled(False)
-        self._update_status_lbl.setText("Updating\u2026")
+        self._update_status_lbl.setText(tr("Updating…"))
         worker = UpdateWorker(auto_update=True, parent=self)
         worker.update_finished.connect(self._on_update_result)
         worker.error.connect(lambda msg: self._on_update_result_error(msg))
@@ -329,9 +363,9 @@ class SettingsDialog(QDialog):
             self._update_status_lbl.setText(r.message)
             self._ytdlp_version_lbl.setText(r.new_version)
         else:
-            self._update_status_lbl.setText(f"Failed: {r.message[:80]}")
+            self._update_status_lbl.setText(tr("Failed: {}").format(r.message[:80]))
 
     def _on_update_result_error(self, msg: str) -> None:
         """Handle unexpected worker errors."""
         self._update_btn.setEnabled(True)
-        self._update_status_lbl.setText(f"Error: {msg[:80]}")
+        self._update_status_lbl.setText(tr("Error (settings): {}").format(msg[:80]))

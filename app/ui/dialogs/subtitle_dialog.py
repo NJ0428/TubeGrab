@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.models.video import VideoInfo
+from app.utils.i18n import tr
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ class SubtitleDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._video_info = video_info
-        self.setWindowTitle("Subtitle Options")
+        self.setWindowTitle(tr("Subtitle Options"))
         self.setMinimumSize(480, 400)
         self._build_ui()
 
@@ -69,7 +70,7 @@ class SubtitleDialog(QDialog):
         main_layout.setSpacing(14)
 
         # --- Header ---
-        header_lbl = QLabel("Subtitle Options")
+        header_lbl = QLabel(tr("Subtitle Options"))
         header_font = QFont()
         header_font.setBold(True)
         header_font.setPointSize(14)
@@ -83,15 +84,14 @@ class SubtitleDialog(QDialog):
         )
         if not has_subtitles:
             notice_lbl = QLabel(
-                "No subtitle information available. "
-                "Languages will be requested as-is."
+                tr("No subtitle information available. Languages will be requested as-is.")
             )
             notice_lbl.setObjectName("infoMeta")
             notice_lbl.setWordWrap(True)
             main_layout.addWidget(notice_lbl)
 
         # --- Language section ---
-        lang_section_lbl = QLabel("Select Languages:")
+        lang_section_lbl = QLabel(tr("Select Languages:"))
         lang_section_lbl.setObjectName("sectionLabel")
         main_layout.addWidget(lang_section_lbl)
 
@@ -103,7 +103,7 @@ class SubtitleDialog(QDialog):
         self._populate_lang_list(has_subtitles)
         main_layout.addWidget(self._lang_list)
 
-        ctrl_note_lbl = QLabel("Hold Ctrl to select multiple languages")
+        ctrl_note_lbl = QLabel(tr("Hold Ctrl to select multiple languages"))
         ctrl_note_lbl.setObjectName("infoMeta")
         main_layout.addWidget(ctrl_note_lbl)
 
@@ -111,7 +111,7 @@ class SubtitleDialog(QDialog):
         fmt_row = QHBoxLayout()
         fmt_row.setSpacing(10)
 
-        fmt_lbl = QLabel("Subtitle Format:")
+        fmt_lbl = QLabel(tr("Subtitle Format:"))
         fmt_lbl.setFixedWidth(120)
         fmt_row.addWidget(fmt_lbl)
 
@@ -127,11 +127,11 @@ class SubtitleDialog(QDialog):
         main_layout.addLayout(fmt_row)
 
         # --- Options section ---
-        self._auto_sub_chk = QCheckBox("Include auto-generated subtitles")
+        self._auto_sub_chk = QCheckBox(tr("Include auto-generated subtitles"))
         self._auto_sub_chk.setChecked(True)
         main_layout.addWidget(self._auto_sub_chk)
 
-        self._subtitle_only_chk = QCheckBox("Download subtitles only (no video)")
+        self._subtitle_only_chk = QCheckBox(tr("Download subtitles only (no video)"))
         self._subtitle_only_chk.setChecked(False)
         main_layout.addWidget(self._subtitle_only_chk)
 

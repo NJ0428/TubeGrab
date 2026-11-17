@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from app.core.history import HistoryManager
 from app.models.history_entry import HistoryEntry
+from app.utils.i18n import tr
 from app.utils.logger import get_logger
 
 logger = get_logger("ui.dialogs.history_dialog")
@@ -47,7 +48,7 @@ class HistoryDialog(QDialog):
         self._history_manager = history_manager
         self._current_entries: list[HistoryEntry] = []
 
-        self.setWindowTitle("Download History")
+        self.setWindowTitle(tr("Download History"))
         self.setMinimumSize(800, 540)
         self.resize(900, 600)
 
@@ -69,18 +70,18 @@ class HistoryDialog(QDialog):
 
         self._search_input = QLineEdit()
         self._search_input.setObjectName("searchInput")
-        self._search_input.setPlaceholderText("Search by title or URL\u2026")
+        self._search_input.setPlaceholderText(tr("Search by title or URL…"))
         self._search_input.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         toolbar.addWidget(self._search_input)
 
-        self._search_btn = QPushButton("Search")
+        self._search_btn = QPushButton(tr("Search"))
         self._search_btn.setObjectName("iconButton")
         self._search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         toolbar.addWidget(self._search_btn)
 
-        date_lbl = QLabel("Date:")
+        date_lbl = QLabel(tr("Date:"))
         toolbar.addWidget(date_lbl)
 
         self._date_input = QLineEdit()
@@ -89,12 +90,12 @@ class HistoryDialog(QDialog):
         self._date_input.setFixedWidth(110)
         toolbar.addWidget(self._date_input)
 
-        self._filter_btn = QPushButton("Filter")
+        self._filter_btn = QPushButton(tr("Filter"))
         self._filter_btn.setObjectName("iconButton")
         self._filter_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         toolbar.addWidget(self._filter_btn)
 
-        self._clear_filter_btn = QPushButton("Clear Filter")
+        self._clear_filter_btn = QPushButton(tr("Clear Filter"))
         self._clear_filter_btn.setObjectName("iconButton")
         self._clear_filter_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         toolbar.addWidget(self._clear_filter_btn)
@@ -103,9 +104,10 @@ class HistoryDialog(QDialog):
 
         # ── Table ───────────────────────────────────────────────────────
         self._table = QTableWidget(0, 7)
-        self._table.setHorizontalHeaderLabels(
-            ["Title", "Channel", "Resolution", "Format", "Size", "Date", "Actions"]
-        )
+        self._table.setHorizontalHeaderLabels([
+            tr("Title"), tr("Channel"), tr("Resolution"),
+            tr("Format"), tr("Size"), tr("Date"), tr("Actions"),
+        ])
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -133,7 +135,7 @@ class HistoryDialog(QDialog):
         bottom = QHBoxLayout()
         bottom.setSpacing(8)
 
-        self._entry_count_lbl = QLabel("0 entries")
+        self._entry_count_lbl = QLabel(tr("0 entries"))
         self._entry_count_lbl.setObjectName("infoMeta")
         bottom.addWidget(self._entry_count_lbl)
 
@@ -141,12 +143,12 @@ class HistoryDialog(QDialog):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        self._clear_all_btn = QPushButton("Clear All History")
+        self._clear_all_btn = QPushButton(tr("Clear All History"))
         self._clear_all_btn.setObjectName("clearBtn")
         self._clear_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         bottom.addWidget(self._clear_all_btn)
 
-        self._close_btn = QPushButton("Close")
+        self._close_btn = QPushButton(tr("Close"))
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         bottom.addWidget(self._close_btn)
 
@@ -189,7 +191,12 @@ class HistoryDialog(QDialog):
             self._table.setRowHeight(row_idx, 38)
 
         count = len(self._current_entries)
-        self._entry_count_lbl.setText(f"{count} {'entry' if count == 1 else 'entries'}")
+        if count == 0:
+            self._entry_count_lbl.setText(tr("0 entries"))
+        elif count == 1:
+            self._entry_count_lbl.setText(tr("{} entry").format(count))
+        else:
+            self._entry_count_lbl.setText(tr("{} entries").format(count))
         logger.debug("History table loaded — %d rows", count)
 
     def _make_actions_widget(self, entry: HistoryEntry) -> QWidget:
@@ -199,14 +206,14 @@ class HistoryDialog(QDialog):
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(4)
 
-        redownload_btn = QPushButton("\u21ba Re-download")
+        redownload_btn = QPushButton(tr("↺ Re-download"))
         redownload_btn.setObjectName("iconButton")
         redownload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         redownload_btn.setFixedHeight(26)
         redownload_btn.clicked.connect(lambda checked=False, e=entry: self._on_redownload(e))
         layout.addWidget(redownload_btn)
 
-        remove_btn = QPushButton("\u2715 Remove")
+        remove_btn = QPushButton(tr("✕ Remove"))
         remove_btn.setObjectName("clearBtn")
         remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remove_btn.setFixedHeight(26)
@@ -271,8 +278,8 @@ class HistoryDialog(QDialog):
         """Ask for confirmation then clear the entire history."""
         reply = QMessageBox.question(
             self,
-            "Clear All History",
-            "Are you sure you want to delete all download history?\n\nThis cannot be undone.",
+            tr("Clear All History"),
+            tr("Are you sure you want to delete all download history?\n\nThis cannot be undone."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
