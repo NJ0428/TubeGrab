@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.utils.config import Config
+from app.utils.i18n import tr
 from app.utils.validators import is_playlist_url, is_valid_url
 
 
@@ -39,7 +40,7 @@ class BatchDialog(QDialog):
         super().__init__(parent)
         self._config = config
 
-        self.setWindowTitle("Batch URL Input")
+        self.setWindowTitle(tr("Batch URL Input"))
         self.setMinimumSize(680, 520)
 
         self._build_ui()
@@ -55,13 +56,13 @@ class BatchDialog(QDialog):
         root.setSpacing(10)
 
         # Section title
-        title_lbl = QLabel("BATCH URL INPUT")
+        title_lbl = QLabel(tr("BATCH URL INPUT"))
         title_lbl.setObjectName("sectionLabel")
         root.addWidget(title_lbl)
 
         # Instructions
         info_lbl = QLabel(
-            "Paste one URL per line. Invalid URLs will be automatically filtered out."
+            tr("Paste one URL per line. Invalid URLs will be automatically filtered out.")
         )
         info_lbl.setObjectName("infoMeta")
         root.addWidget(info_lbl)
@@ -82,7 +83,7 @@ class BatchDialog(QDialog):
         analyze_row = QHBoxLayout()
         analyze_row.setSpacing(10)
 
-        self._analyze_btn = QPushButton("Analyze URLs")
+        self._analyze_btn = QPushButton(tr("Analyze URLs"))
         self._analyze_btn.setObjectName("fetchButton")
         self._analyze_btn.setFixedWidth(120)
         self._analyze_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -99,7 +100,7 @@ class BatchDialog(QDialog):
 
         # Preview table
         self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["Status", "URL", "Type"])
+        self._table.setHorizontalHeaderLabels([tr("Status"), "URL", tr("Type")])
         self._table.setAlternatingRowColors(True)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -120,7 +121,7 @@ class BatchDialog(QDialog):
         opts_row = QHBoxLayout()
         opts_row.setSpacing(10)
 
-        res_lbl = QLabel("Resolution:")
+        res_lbl = QLabel(tr("Resolution:"))
         opts_row.addWidget(res_lbl)
 
         self._resolution_combo = QComboBox()
@@ -129,7 +130,7 @@ class BatchDialog(QDialog):
         self._resolution_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         opts_row.addWidget(self._resolution_combo)
 
-        fmt_lbl = QLabel("Format:")
+        fmt_lbl = QLabel(tr("Format:"))
         opts_row.addWidget(fmt_lbl)
 
         self._format_combo = QComboBox()
@@ -147,21 +148,21 @@ class BatchDialog(QDialog):
         path_row = QHBoxLayout()
         path_row.setSpacing(8)
 
-        path_lbl = QLabel("Save to:")
+        path_lbl = QLabel(tr("Save to:"))
         path_row.addWidget(path_lbl)
 
         self._save_path_input = QLineEdit()
         self._save_path_input.setObjectName("savePathInput")
-        self._save_path_input.setPlaceholderText("Select download folder…")
+        self._save_path_input.setPlaceholderText(tr("Select download folder…"))
         default_path = self._config.get("download_path") or str(
             Path.home() / "Downloads"
         )
         self._save_path_input.setText(default_path)
         path_row.addWidget(self._save_path_input)
 
-        self._browse_btn = QPushButton("Browse…")
+        self._browse_btn = QPushButton(tr("Browse…"))
         self._browse_btn.setObjectName("iconButton")
-        self._browse_btn.setToolTip("Choose download folder")
+        self._browse_btn.setToolTip(tr("Choose download folder"))
         self._browse_btn.setFixedWidth(80)
         self._browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         path_row.addWidget(self._browse_btn)
@@ -171,7 +172,7 @@ class BatchDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        self._queue_lbl = QLabel("0 URLs will be queued")
+        self._queue_lbl = QLabel(tr("0 URLs will be queued"))
         self._queue_lbl.setObjectName("infoMeta")
         btn_row.addWidget(self._queue_lbl)
 
@@ -179,13 +180,13 @@ class BatchDialog(QDialog):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        self._add_btn = QPushButton("Add to Queue (0)")
+        self._add_btn = QPushButton(tr("Add to Queue ({})").format(0))
         self._add_btn.setObjectName("downloadButton")
         self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._add_btn.setEnabled(False)
         btn_row.addWidget(self._add_btn)
 
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(tr("Cancel"))
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
@@ -251,7 +252,7 @@ class BatchDialog(QDialog):
         # Rebuild table
         all_rows: list[tuple[str, str, str]] = []
         for url in valid_urls:
-            url_type = "Playlist" if is_playlist_url(url) else "Video"
+            url_type = tr("Playlist") if is_playlist_url(url) else tr("Video")
             all_rows.append(("valid", url, url_type))
         for url in invalid_urls:
             all_rows.append(("invalid", url, "—"))
@@ -294,25 +295,29 @@ class BatchDialog(QDialog):
         d = len(duplicate_urls)
         parts: list[str] = []
         if v:
-            parts.append(f"✔ {v} valid")
+            parts.append(tr("✔ {} valid").format(v))
         if i:
-            parts.append(f"✘ {i} invalid")
+            parts.append(tr("✘ {} invalid").format(i))
         if d:
-            parts.append(f"⬛ {d} duplicate{'s' if d != 1 else ''}")
+            dup_key = "⬛ {} duplicate" if d == 1 else "⬛ {} duplicates"
+            parts.append(tr(dup_key).format(d))
         self._status_lbl.setText("  ".join(parts) if parts else "")
 
         # Update queue label and button
-        self._queue_lbl.setText(
-            f"{v} URL{'s' if v != 1 else ''} will be queued"
-        )
-        self._add_btn.setText(f"Add to Queue ({v})")
+        if v == 0:
+            self._queue_lbl.setText(tr("0 URLs will be queued"))
+        elif v == 1:
+            self._queue_lbl.setText(tr("{} URL will be queued").format(v))
+        else:
+            self._queue_lbl.setText(tr("{} URLs will be queued").format(v))
+        self._add_btn.setText(tr("Add to Queue ({})").format(v))
         self._add_btn.setEnabled(v > 0)
 
     def _on_browse(self) -> None:
         current = self._save_path_input.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Select Download Folder",
+            tr("Select Download Folder"),
             current,
             QFileDialog.Option.ShowDirsOnly,
         )
