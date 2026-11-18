@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
 from app.utils.config import Config
+from app.utils.i18n import set_language
 from app.utils.logger import get_logger
 from app.ui.main_window import MainWindow
 
@@ -44,10 +45,11 @@ def main() -> int:
     app.setApplicationVersion("0.1.0")
     app.setOrganizationName("TubeGrab")
 
-    # Load config to determine initial theme
+    # Load config to determine initial theme and language
     config = Config()
     config.load()
     initial_theme = config.get("theme") or "dark"
+    set_language(config.get("language") or "en")
 
     # Apply stylesheet before creating any widgets
     qss = load_stylesheet(initial_theme)
