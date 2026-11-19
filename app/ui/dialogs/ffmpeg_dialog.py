@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.utils.i18n import tr
+
 _FFMPEG_DOWNLOAD_URL = "https://ffmpeg.org/download.html"
 
 
@@ -22,7 +24,7 @@ class FfmpegWarningDialog(QDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("FFmpeg Not Found")
+        self.setWindowTitle(tr("FFmpeg Not Found"))
         self.setMinimumWidth(420)
         self.setModal(True)
         self._build_ui()
@@ -37,10 +39,11 @@ class FfmpegWarningDialog(QDialog):
         layout.setSpacing(16)
 
         message_lbl = QLabel(
-            "FFmpeg was not found on this system.\n\n"
-            "Audio extraction (MP3/M4A) and some video merging features "
-            "will not work.\n\n"
-            "Please install FFmpeg and ensure it is in your PATH."
+            tr(
+                "FFmpeg was not found on this system.\n\nAudio extraction (MP3/M4A) and some "
+                "video merging features will not work.\n\nPlease install FFmpeg and ensure it "
+                "is in your PATH."
+            )
         )
         message_lbl.setWordWrap(True)
         layout.addWidget(message_lbl)
@@ -48,13 +51,13 @@ class FfmpegWarningDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        download_btn = QPushButton("Download FFmpeg")
+        download_btn = QPushButton(tr("Download FFmpeg"))
         download_btn.setObjectName("downloadButton")
         download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         download_btn.clicked.connect(self._on_download_ffmpeg)
         btn_row.addWidget(download_btn)
 
-        continue_btn = QPushButton("Continue Anyway")
+        continue_btn = QPushButton(tr("Continue Anyway"))
         continue_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         continue_btn.clicked.connect(self.accept)
         btn_row.addWidget(continue_btn)

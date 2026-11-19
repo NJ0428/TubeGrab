@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from app.models.playlist import PlaylistInfo
 from app.utils.config import Config
+from app.utils.i18n import tr
 from app.utils.logger import get_logger
 
 logger = get_logger("ui.dialogs.playlist_dialog")
@@ -50,7 +51,7 @@ class PlaylistDialog(QDialog):
         self._playlist_info = playlist_info
         self._config = config
 
-        self.setWindowTitle("Playlist Download")
+        self.setWindowTitle(tr("Playlist Download"))
         self.setMinimumSize(700, 500)
         self.resize(780, 560)
 
@@ -73,7 +74,7 @@ class PlaylistDialog(QDialog):
         # Table
         self._table = QTableWidget()
         self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(["", "#", "Title", "Duration"])
+        self._table.setHorizontalHeaderLabels(["", "#", tr("Title"), tr("Duration")])
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -122,7 +123,7 @@ class PlaylistDialog(QDialog):
         channel_lbl.setObjectName("infoMeta")
         meta_row.addWidget(channel_lbl)
 
-        count_lbl = QLabel(f"{self._playlist_info.total_count} videos")
+        count_lbl = QLabel(tr("{} videos").format(self._playlist_info.total_count))
         count_lbl.setObjectName("infoMeta")
         meta_row.addWidget(count_lbl)
 
@@ -137,17 +138,17 @@ class PlaylistDialog(QDialog):
         row = QHBoxLayout()
         row.setSpacing(8)
 
-        select_all_btn = QPushButton("Select All")
+        select_all_btn = QPushButton(tr("Select All"))
         select_all_btn.setFixedWidth(90)
         select_all_btn.clicked.connect(self._on_select_all)
         row.addWidget(select_all_btn)
 
-        deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn = QPushButton(tr("Deselect All"))
         deselect_all_btn.setFixedWidth(90)
         deselect_all_btn.clicked.connect(self._on_deselect_all)
         row.addWidget(deselect_all_btn)
 
-        self._selected_label = QLabel("0 selected")
+        self._selected_label = QLabel(tr("{} selected").format(0))
         self._selected_label.setObjectName("infoMeta")
         row.addWidget(self._selected_label)
 
@@ -155,7 +156,7 @@ class PlaylistDialog(QDialog):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        res_lbl = QLabel("Resolution:")
+        res_lbl = QLabel(tr("Resolution:"))
         row.addWidget(res_lbl)
 
         self._resolution_combo = QComboBox()
@@ -163,7 +164,7 @@ class PlaylistDialog(QDialog):
         self._resolution_combo.setFixedWidth(110)
         row.addWidget(self._resolution_combo)
 
-        fmt_lbl = QLabel("Format:")
+        fmt_lbl = QLabel(tr("Format:"))
         row.addWidget(fmt_lbl)
 
         self._format_combo = QComboBox()
@@ -177,17 +178,17 @@ class PlaylistDialog(QDialog):
         row = QHBoxLayout()
         row.setSpacing(8)
 
-        path_lbl = QLabel("Save to:")
+        path_lbl = QLabel(tr("Save to:"))
         path_lbl.setFixedWidth(52)
         row.addWidget(path_lbl)
 
         default_path = self._config.get("download_path") or str(Path.home() / "Downloads")
         self._save_path_input = QLineEdit(default_path)
         self._save_path_input.setObjectName("savePathInput")
-        self._save_path_input.setPlaceholderText("Select download folder…")
+        self._save_path_input.setPlaceholderText(tr("Select download folder…"))
         row.addWidget(self._save_path_input)
 
-        browse_btn = QPushButton("Browse…")
+        browse_btn = QPushButton(tr("Browse…"))
         browse_btn.setObjectName("iconButton")
         browse_btn.setFixedWidth(80)
         browse_btn.clicked.connect(self._on_browse)
@@ -203,12 +204,12 @@ class PlaylistDialog(QDialog):
             QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         )
 
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(tr("Cancel"))
         cancel_btn.setFixedWidth(90)
         cancel_btn.clicked.connect(self.reject)
         row.addWidget(cancel_btn)
 
-        self._download_btn = QPushButton("Download Selected (0)")
+        self._download_btn = QPushButton(tr("Download Selected ({})").format(0))
         self._download_btn.setObjectName("downloadButton")
         self._download_btn.setFixedWidth(210)
         self._download_btn.setEnabled(False)
@@ -273,8 +274,8 @@ class PlaylistDialog(QDialog):
 
     def _on_selection_changed(self) -> None:
         count = sum(1 for cb in self._checkboxes if cb.isChecked())
-        self._selected_label.setText(f"{count} selected")
-        self._download_btn.setText(f"Download Selected ({count})")
+        self._selected_label.setText(tr("{} selected").format(count))
+        self._download_btn.setText(tr("Download Selected ({})").format(count))
         self._download_btn.setEnabled(count > 0)
 
     def _on_download(self) -> None:
@@ -303,7 +304,7 @@ class PlaylistDialog(QDialog):
         current = self._save_path_input.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Select Download Folder",
+            tr("Select Download Folder"),
             current,
             QFileDialog.Option.ShowDirsOnly,
         )
