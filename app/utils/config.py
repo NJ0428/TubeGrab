@@ -28,6 +28,7 @@ _DEFAULTS: dict[str, Any] = {
     "minimize_to_tray": True,
     "tray_notifications": True,
     "auto_update_ytdlp": True,     # check and update yt-dlp on startup
+    "language": "en",              # UI language: "en" or "ko"
 }
 
 
