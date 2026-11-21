@@ -117,6 +117,8 @@ class VideoInfoWidget(QWidget):
         self._loader.failed.connect(self._on_thumbnail_failed)
         self._loader.finished.connect(self._thread.quit)
         self._loader.failed.connect(self._thread.quit)
+        # Clear refs first, then schedule C++ cleanup — prevents isRunning() on deleted object
+        self._thread.finished.connect(self._on_thread_done)
         self._thread.finished.connect(self._thread.deleteLater)
 
         self._thread.start()
@@ -136,9 +138,18 @@ class VideoInfoWidget(QWidget):
     def _on_thumbnail_failed(self) -> None:
         self._thumbnail_lbl.setText("No Image")
 
+    def _on_thread_done(self) -> None:
+        """Clear Python references once the thread finishes (before deleteLater fires)."""
+        self._thread = None
+        self._loader = None
+
     def _cancel_thumbnail_load(self) -> None:
-        if self._thread and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(2000)
+        if self._thread is not None:
+            try:
+                if self._thread.isRunning():
+                    self._thread.quit()
+                    self._thread.wait(2000)
+            except RuntimeError:
+                pass  # C++ object already deleted; nothing to cancel
         self._thread = None
         self._loader = None
