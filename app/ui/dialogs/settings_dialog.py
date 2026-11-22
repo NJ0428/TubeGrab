@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
     QWidget,
+    QDoubleSpinBox,
 )
 
 from app.utils.config import Config
@@ -162,6 +163,33 @@ class SettingsDialog(QDialog):
         hint_widget.setLayout(hint_row)
         form.addRow("", hint_widget)
 
+        # ── Speed Limit ───────────────────────────────────────────────
+        speed_lbl = QLabel(tr("── Speed Limit ──"))
+        speed_lbl.setObjectName("sectionLabel")
+        form.addRow(speed_lbl)
+
+        self._speed_limit_check = QCheckBox(tr("Limit download speed"))
+        self._speed_limit_check.toggled.connect(self._on_speed_limit_toggled)
+        form.addRow("", self._speed_limit_check)
+
+        speed_row = QHBoxLayout()
+        speed_row.setSpacing(6)
+        self._speed_spin = QDoubleSpinBox()
+        self._speed_spin.setRange(0.1, 99999.0)
+        self._speed_spin.setDecimals(1)
+        self._speed_spin.setSingleStep(1.0)
+        self._speed_spin.setFixedWidth(100)
+        speed_row.addWidget(self._speed_spin)
+        self._speed_unit_combo = QComboBox()
+        self._speed_unit_combo.addItems(["KB/s", "MB/s"])
+        self._speed_unit_combo.setFixedWidth(70)
+        self._speed_unit_combo.currentIndexChanged.connect(self._on_speed_unit_changed)
+        speed_row.addWidget(self._speed_unit_combo)
+        speed_row.addStretch(1)
+        self._speed_row_widget = QWidget()
+        self._speed_row_widget.setLayout(speed_row)
+        form.addRow(QLabel(tr("Max speed:")), self._speed_row_widget)
+
         # ── yt-dlp ────────────────────────────────────────────────────
         ytdlp_lbl = QLabel(tr("── yt-dlp ──"))
         ytdlp_lbl.setObjectName("sectionLabel")
@@ -250,6 +278,19 @@ class SettingsDialog(QDialog):
         )
         self._on_template_changed(self._template_edit.text())
 
+        # Speed limit
+        speed_enabled = bool(self._config.get("speed_limit_enabled"))
+        speed_kbps = int(self._config.get("speed_limit_kbps") or 1024)
+        self._speed_limit_check.setChecked(speed_enabled)
+        # Display in MB/s when >= 1024 KB/s, otherwise KB/s
+        if speed_kbps >= 1024 and speed_kbps % 1024 == 0:
+            self._speed_unit_combo.setCurrentIndex(1)  # MB/s
+            self._speed_spin.setValue(speed_kbps / 1024.0)
+        else:
+            self._speed_unit_combo.setCurrentIndex(0)  # KB/s
+            self._speed_spin.setValue(float(speed_kbps))
+        self._on_speed_limit_toggled(speed_enabled)
+
         from app.core.updater import get_ytdlp_version
         self._ytdlp_version_lbl.setText(get_ytdlp_version())
         self._auto_update_check.setChecked(bool(self._config.get("auto_update_ytdlp")))
@@ -286,6 +327,20 @@ class SettingsDialog(QDialog):
         new_text = current[:cursor_pos] + var + current[cursor_pos:]
         self._template_edit.setText(new_text)
         self._template_edit.setCursorPosition(cursor_pos + len(var))
+
+    def _on_speed_limit_toggled(self, enabled: bool) -> None:
+        """Enable or disable the speed input row based on the toggle."""
+        self._speed_row_widget.setEnabled(enabled)
+
+    def _on_speed_unit_changed(self, index: int) -> None:
+        """Convert displayed value when user switches between KB/s and MB/s."""
+        current = self._speed_spin.value()
+        if index == 1:  # switched to MB/s
+            self._speed_spin.setRange(0.1, 99999.0)
+            self._speed_spin.setValue(max(0.1, current / 1024.0))
+        else:  # switched to KB/s
+            self._speed_spin.setRange(1.0, 999999.0)
+            self._speed_spin.setValue(max(1.0, current * 1024.0))
 
     def _on_browse(self) -> None:
         current = self._path_edit.text() or str(Path.home() / "Downloads")
@@ -332,6 +387,16 @@ class SettingsDialog(QDialog):
         self._config.set("tray_notifications", self._tray_notify_check.isChecked())
         self._config.set("filename_template", self._template_edit.text().strip())
         self._config.set("auto_update_ytdlp", self._auto_update_check.isChecked())
+
+        # Speed limit
+        self._config.set("speed_limit_enabled", self._speed_limit_check.isChecked())
+        raw_value = self._speed_spin.value()
+        if self._speed_unit_combo.currentText() == "MB/s":
+            kbps = int(raw_value * 1024)
+        else:
+            kbps = int(raw_value)
+        self._config.set("speed_limit_kbps", max(1, kbps))
+
         self._config.save()
 
         self.settings_changed.emit()
