@@ -29,6 +29,8 @@ _DEFAULTS: dict[str, Any] = {
     "tray_notifications": True,
     "auto_update_ytdlp": True,     # check and update yt-dlp on startup
     "language": "en",              # UI language: "en" or "ko"
+    "speed_limit_enabled": False,  # throttle download speed
+    "speed_limit_kbps": 1024,      # max download speed in KB/s
 }
 
 
