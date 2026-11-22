@@ -22,8 +22,13 @@ class Downloader:
                      When None, yt-dlp uses whatever is on PATH.
     """
 
-    def __init__(self, ffmpeg_path: str | None = None) -> None:
+    def __init__(
+        self,
+        ffmpeg_path: str | None = None,
+        speed_limit_bytes: int | None = None,
+    ) -> None:
         self._ffmpeg_path = ffmpeg_path
+        self._speed_limit_bytes = speed_limit_bytes
 
     # ------------------------------------------------------------------
     # Public API
@@ -191,6 +196,9 @@ class Downloader:
             "no_warnings": True,
             "progress_hooks": [progress_hook],
         }
+
+        if self._speed_limit_bytes:
+            opts["ratelimit"] = self._speed_limit_bytes
 
         if self._ffmpeg_path:
             opts["ffmpeg_location"] = self._ffmpeg_path

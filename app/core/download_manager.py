@@ -80,6 +80,17 @@ class DownloadManager(QObject):
             return _DEFAULT_MAX_CONCURRENT
 
     @property
+    def speed_limit_bytes(self) -> int | None:
+        """Current speed limit in bytes/s, or None if unlimited (read from config)."""
+        if not self._config.get("speed_limit_enabled"):
+            return None
+        kbps = self._config.get("speed_limit_kbps") or 1024
+        try:
+            return max(1, int(kbps)) * 1024
+        except (TypeError, ValueError):
+            return None
+
+    @property
     def active_count(self) -> int:
         """Number of workers currently running."""
         return len(self._workers)
@@ -218,7 +229,12 @@ class DownloadManager(QObject):
                 logger.warning("Task in queue but not in _tasks — task_id=%s", task_id)
                 continue
 
-            worker = DownloadWorker(task, ffmpeg_path=self._ffmpeg_path, parent=self)
+            worker = DownloadWorker(
+                task,
+                ffmpeg_path=self._ffmpeg_path,
+                speed_limit_bytes=self.speed_limit_bytes,
+                parent=self,
+            )
 
             # Wire up worker signals to manager slots, passing task_id via lambdas
             worker.progress_updated.connect(
