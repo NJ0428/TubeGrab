@@ -31,11 +31,13 @@ class DownloadWorker(QThread):
         self,
         task: DownloadTask,
         ffmpeg_path: str | None = None,
+        speed_limit_bytes: int | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._task = task
         self._ffmpeg_path = ffmpeg_path
+        self._speed_limit_bytes = speed_limit_bytes
         self._cancelled: bool = False
 
     # ------------------------------------------------------------------
@@ -56,7 +58,10 @@ class DownloadWorker(QThread):
         task_id = self._task.task_id
         logger.debug("DownloadWorker started — task_id=%s", task_id)
 
-        downloader = Downloader(ffmpeg_path=self._ffmpeg_path)
+        downloader = Downloader(
+            ffmpeg_path=self._ffmpeg_path,
+            speed_limit_bytes=self._speed_limit_bytes,
+        )
 
         def _progress_hook(d: dict) -> None:
             """Convert yt-dlp progress dict into a progress_updated signal."""
