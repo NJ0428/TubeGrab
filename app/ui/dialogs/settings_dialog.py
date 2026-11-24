@@ -190,6 +190,23 @@ class SettingsDialog(QDialog):
         self._speed_row_widget.setLayout(speed_row)
         form.addRow(QLabel(tr("Max speed:")), self._speed_row_widget)
 
+        # ── After Download ────────────────────────────────────────────
+        after_lbl = QLabel(tr("── After Download ──"))
+        after_lbl.setObjectName("sectionLabel")
+        form.addRow(after_lbl)
+
+        self._on_file_complete_combo = QComboBox()
+        self._on_file_complete_combo.addItems([
+            tr("Do nothing"), tr("Open file"), tr("Open folder")
+        ])
+        form.addRow(QLabel(tr("When a download finishes:")), self._on_file_complete_combo)
+
+        self._on_all_complete_combo = QComboBox()
+        self._on_all_complete_combo.addItems([
+            tr("Do nothing"), tr("Shutdown PC"), tr("Sleep")
+        ])
+        form.addRow(QLabel(tr("When all downloads finish:")), self._on_all_complete_combo)
+
         # ── yt-dlp ────────────────────────────────────────────────────
         ytdlp_lbl = QLabel(tr("── yt-dlp ──"))
         ytdlp_lbl.setObjectName("sectionLabel")
@@ -291,6 +308,16 @@ class SettingsDialog(QDialog):
             self._speed_spin.setValue(float(speed_kbps))
         self._on_speed_limit_toggled(speed_enabled)
 
+        # After Download
+        _file_map = {"nothing": 0, "open_file": 1, "open_folder": 2}
+        self._on_file_complete_combo.setCurrentIndex(
+            _file_map.get(self._config.get("on_file_complete") or "nothing", 0)
+        )
+        _all_map = {"nothing": 0, "shutdown": 1, "sleep": 2}
+        self._on_all_complete_combo.setCurrentIndex(
+            _all_map.get(self._config.get("on_all_complete") or "nothing", 0)
+        )
+
         from app.core.updater import get_ytdlp_version
         self._ytdlp_version_lbl.setText(get_ytdlp_version())
         self._auto_update_check.setChecked(bool(self._config.get("auto_update_ytdlp")))
@@ -387,6 +414,18 @@ class SettingsDialog(QDialog):
         self._config.set("tray_notifications", self._tray_notify_check.isChecked())
         self._config.set("filename_template", self._template_edit.text().strip())
         self._config.set("auto_update_ytdlp", self._auto_update_check.isChecked())
+
+        # After Download
+        _file_opts = ["nothing", "open_file", "open_folder"]
+        self._config.set(
+            "on_file_complete",
+            _file_opts[self._on_file_complete_combo.currentIndex()],
+        )
+        _all_opts = ["nothing", "shutdown", "sleep"]
+        self._config.set(
+            "on_all_complete",
+            _all_opts[self._on_all_complete_combo.currentIndex()],
+        )
 
         # Speed limit
         self._config.set("speed_limit_enabled", self._speed_limit_check.isChecked())
