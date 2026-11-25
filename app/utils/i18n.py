@@ -226,6 +226,23 @@ _KO: dict[str, str] = {
     "Download FFmpeg": "FFmpeg 다운로드",
     "Continue Anyway": "그냥 계속",
 
+    # ── After Download ─────────────────────────────────────────────────────
+    "── After Download ──": "── 다운로드 후 작업 ──",
+    "When a download finishes:": "다운로드 완료 시:",
+    "When all downloads finish:": "모든 다운로드 완료 시:",
+    "Do nothing": "아무것도 안 함",
+    "Open file": "파일 열기",
+    "Open folder": "폴더 열기",
+    "Shutdown PC": "PC 종료",
+    "Sleep": "절전 모드",
+
+    # ── Post-complete countdown dialog ─────────────────────────────────────
+    "All Downloads Complete": "모든 다운로드 완료",
+    "All downloads have finished.": "모든 다운로드가 완료되었습니다.",
+    "PC will shut down in {} seconds.": "{}초 후 PC가 종료됩니다.",
+    "PC will sleep in {} seconds.": "{}초 후 PC가 절전 모드로 전환됩니다.",
+    "Click Cancel to abort.": "취소하려면 취소를 클릭하세요.",
+
     # ── Tray ───────────────────────────────────────────────────────────────
     "Show Window": "창 표시",
     "Pause Downloads": "다운로드 일시 정지",

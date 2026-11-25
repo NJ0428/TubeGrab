@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self._subtitle_format: str = ""
         self._subtitle_only: bool = False
         self._last_clipboard_url: str = ""  # tracks last detected URL to avoid repeat prompts
+        self._had_active_downloads: bool = False  # used to detect "all downloads finished"
 
         # Detect ffmpeg once at startup
         self._ffmpeg_path: str | None = find_ffmpeg()
@@ -769,6 +770,13 @@ class MainWindow(QMainWindow):
             video_title = task.video_info.title if task else task_id
             self._tray_icon.show_download_notification(video_title)
 
+        # Per-file post-download action
+        action = self._config.get("on_file_complete") or "nothing"
+        if file_path and action == "open_file":
+            self._open_file_with_default_app(file_path)
+        elif file_path and action == "open_folder":
+            self._open_containing_folder(file_path)
+
     def _on_download_error_from_manager(self, task_id: str, msg: str) -> None:
         """Slot: a download failed (non-cancellation error)."""
         task = self._download_manager.get_task(task_id)
@@ -807,6 +815,11 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(
                 tr("Downloading {} file(s) — {} queued").format(active, pending), 0
             )
+            self._had_active_downloads = True
+        elif self._had_active_downloads and total > 0 and pending == 0:
+            # All downloads just finished
+            self._had_active_downloads = False
+            self._trigger_all_complete_action()
 
         self._tray_icon.update_badge(active, paused=self._download_manager.paused)
 
@@ -823,6 +836,47 @@ class MainWindow(QMainWindow):
                 subprocess.Popen(["xdg-open", str(Path(file_path).parent)])
         except OSError as exc:
             logger.error("Failed to open file location: %s", exc)
+
+    def _open_file_with_default_app(self, file_path: str) -> None:
+        """Open *file_path* with the OS default application."""
+        import os
+        import subprocess
+        import sys
+        logger.info("Opening file with default app: %s", file_path)
+        try:
+            if sys.platform == "win32":
+                os.startfile(file_path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", file_path])
+            else:
+                subprocess.Popen(["xdg-open", file_path])
+        except OSError as exc:
+            logger.error("Failed to open file: %s", exc)
+
+    def _open_containing_folder(self, file_path: str) -> None:
+        """Open the folder that contains *file_path* in the system file manager."""
+        import subprocess
+        import sys
+        folder = str(Path(file_path).parent)
+        logger.info("Opening containing folder: %s", folder)
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", folder])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", folder])
+            else:
+                subprocess.Popen(["xdg-open", folder])
+        except OSError as exc:
+            logger.error("Failed to open folder: %s", exc)
+
+    def _trigger_all_complete_action(self) -> None:
+        """Execute the configured post-all-complete system action."""
+        from app.ui.dialogs.post_complete_dialog import PostCompleteDialog
+        action = self._config.get("on_all_complete") or "nothing"
+        if action in ("shutdown", "sleep"):
+            logger.info("All downloads finished — showing post-complete dialog (%s)", action)
+            dialog = PostCompleteDialog(action, parent=self)
+            dialog.exec()
 
     def _on_tray_show(self) -> None:
         """Restore window from tray."""
