@@ -31,6 +31,8 @@ _DEFAULTS: dict[str, Any] = {
     "language": "en",              # UI language: "en" or "ko"
     "speed_limit_enabled": False,  # throttle download speed
     "speed_limit_kbps": 1024,      # max download speed in KB/s
+    "on_file_complete": "nothing",  # action when each file finishes: nothing|open_file|open_folder
+    "on_all_complete": "nothing",   # action when all downloads finish: nothing|shutdown|sleep
 }
 
 
