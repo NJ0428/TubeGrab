@@ -7,7 +7,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QCloseEvent, QFont
+from PySide6.QtGui import (
+    QCloseEvent,
+    QCursor,
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDropEvent,
+    QFont,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -61,6 +68,57 @@ logger = get_logger("ui.main_window")
 _STYLES_DIR = Path(__file__).resolve().parents[2] / "assets" / "styles"
 
 
+class _DropOverlay(QWidget):
+    """Semi-transparent overlay shown while a dragged item is over the main window."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setObjectName("dropOverlay")
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(10)
+
+        self._icon_lbl = QLabel()
+        self._icon_lbl.setObjectName("dropOverlayIcon")
+        self._icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._icon_lbl)
+
+        self._text_lbl = QLabel()
+        self._text_lbl.setObjectName("dropOverlayText")
+        self._text_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._text_lbl)
+
+        self.hide()
+
+    def _fit_to_parent(self) -> None:
+        if self.parent():
+            self.setGeometry(self.parent().rect())  # type: ignore[union-attr]
+
+    def show_url_mode(self) -> None:
+        self._icon_lbl.setText("🔗")
+        self._text_lbl.setText(tr("Drop to fetch video info"))
+        self._fit_to_parent()
+        self.show()
+        self.raise_()
+
+    def show_file_mode(self) -> None:
+        self._icon_lbl.setText("📄")
+        self._text_lbl.setText(tr("Drop .txt file for batch download"))
+        self._fit_to_parent()
+        self.show()
+        self.raise_()
+
+    def show_invalid_mode(self) -> None:
+        self._icon_lbl.setText("⚠")
+        self._text_lbl.setText(tr("Only YouTube URLs or .txt files supported"))
+        self._fit_to_parent()
+        self.show()
+        self.raise_()
+
+
 class MainWindow(QMainWindow):
     """Primary application window for TubeGrab."""
 
@@ -93,6 +151,13 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._connect_signals()
+
+        # Drag-and-drop: timer to debounce overlay hide on widget transitions
+        self._drag_hide_timer = QTimer(self)
+        self._drag_hide_timer.setSingleShot(True)
+        self._drag_hide_timer.setInterval(80)
+        self._drag_hide_timer.timeout.connect(self._check_hide_drop_overlay)
+        QApplication.instance().installEventFilter(self)
 
         # System tray
         self._tray_icon = TrayIcon(parent=self)
@@ -127,6 +192,8 @@ class MainWindow(QMainWindow):
         central = QWidget()
         central.setObjectName("centralWidget")
         self.setCentralWidget(central)
+        self.setAcceptDrops(True)
+        self._drop_overlay = _DropOverlay(central)
 
         root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -1213,6 +1280,123 @@ class MainWindow(QMainWindow):
                 )
         elif not r.success:
             logger.warning("yt-dlp auto-update failed: %s", r.message)
+
+    # ------------------------------------------------------------------
+    # Drag-and-drop support
+    # ------------------------------------------------------------------
+
+    def eventFilter(self, obj: object, event: QEvent) -> bool:
+        """Application-level event filter to track drag events across all child widgets."""
+        if not (isinstance(obj, QWidget) and obj.window() is self):
+            return super().eventFilter(obj, event)
+
+        t = event.type()
+
+        if t == QEvent.Type.DragEnter:
+            self._show_drop_overlay(event.mimeData())  # type: ignore[union-attr]
+
+        elif t == QEvent.Type.DragLeave:
+            # DragLeave fires on each widget during cursor movement; debounce it
+            self._drag_hide_timer.start(80)
+
+        elif t == QEvent.Type.Drop:
+            self._drop_overlay.hide()
+            self._drag_hide_timer.stop()
+            mime = event.mimeData()  # type: ignore[union-attr]
+            if mime.hasUrls():
+                for qurl in mime.urls():
+                    if qurl.isLocalFile() and qurl.toLocalFile().lower().endswith(".txt"):
+                        self._handle_drop_file(qurl.toLocalFile())
+                        return True  # consume — don't let QLineEdit insert the file path
+
+        elif t == QEvent.Type.Resize and obj is self.centralWidget():
+            if self._drop_overlay.isVisible():
+                self._drop_overlay.setGeometry(self.centralWidget().rect())
+
+        return super().eventFilter(obj, event)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Accept drags over non-interactive areas of the window."""
+        mime = event.mimeData()
+        if mime.hasUrls() or (mime.hasText() and is_valid_url(mime.text().strip())):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        """Hide overlay when drag leaves the main window."""
+        self._drop_overlay.hide()
+        self._drag_hide_timer.stop()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Handle drops on non-interactive areas of the window."""
+        self._drop_overlay.hide()
+        self._drag_hide_timer.stop()
+        mime = event.mimeData()
+        if mime.hasUrls():
+            for qurl in mime.urls():
+                if qurl.isLocalFile():
+                    path = qurl.toLocalFile()
+                    if path.lower().endswith(".txt"):
+                        self._handle_drop_file(path)
+                        event.acceptProposedAction()
+                        return
+                else:
+                    raw = qurl.toString()
+                    if is_valid_url(raw):
+                        self._handle_drop_url(raw)
+                        event.acceptProposedAction()
+                        return
+        elif mime.hasText():
+            text = mime.text().strip()
+            if is_valid_url(text):
+                self._handle_drop_url(text)
+                event.acceptProposedAction()
+                return
+        event.ignore()
+
+    def _show_drop_overlay(self, mime) -> None:  # type: ignore[no-untyped-def]
+        """Determine drop type from MIME data and show the appropriate overlay mode."""
+        if mime.hasUrls():
+            for qurl in mime.urls():
+                if qurl.isLocalFile():
+                    if qurl.toLocalFile().lower().endswith(".txt"):
+                        self._drop_overlay.show_file_mode()
+                        return
+                else:
+                    if is_valid_url(qurl.toString()):
+                        self._drop_overlay.show_url_mode()
+                        return
+        if mime.hasText() and is_valid_url(mime.text().strip()):
+            self._drop_overlay.show_url_mode()
+            return
+        self._drop_overlay.show_invalid_mode()
+
+    def _check_hide_drop_overlay(self) -> None:
+        """Hide overlay if the cursor has left our window (called after debounce timer)."""
+        widget_at = QApplication.widgetAt(QCursor.pos())
+        if widget_at is None or widget_at.window() is not self:
+            self._drop_overlay.hide()
+
+    def _handle_drop_url(self, url: str) -> None:
+        """Handle a YouTube URL dropped onto the window."""
+        self._url_input.set_url(url)
+        self._status_bar.showMessage(tr("URL dropped: {}").format(url[:60]), 4000)
+        logger.info("URL dropped: %s", url)
+
+    def _handle_drop_file(self, path: str) -> None:
+        """Read a dropped .txt file and open the BatchDialog pre-filled with its contents."""
+        try:
+            content = Path(path).read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            self._status_bar.showMessage(tr("Could not read dropped file."), 4000)
+            logger.warning("Could not read dropped file: %s", path)
+            return
+        dialog = BatchDialog(self._config, parent=self)
+        dialog.set_initial_text(content)
+        dialog.batch_download_requested.connect(self._on_batch_download_requested)
+        dialog.exec()
 
     # ------------------------------------------------------------------
     # Window events
