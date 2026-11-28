@@ -117,6 +117,22 @@ class SettingsDialog(QDialog):
         )
         form.addRow("", self._tray_notify_check)
 
+        # ── Startup ───────────────────────────────────────────────────
+        startup_lbl = QLabel(tr("── Startup ──"))
+        startup_lbl.setObjectName("sectionLabel")
+        form.addRow(startup_lbl)
+
+        self._startup_check = QCheckBox(tr("Launch TubeGrab on Windows startup"))
+        self._startup_check.toggled.connect(self._on_startup_toggled)
+        form.addRow("", self._startup_check)
+
+        self._startup_minimized_check = QCheckBox(tr("Start minimized to tray"))
+        form.addRow("", self._startup_minimized_check)
+
+        self._startup_status_lbl = QLabel("")
+        self._startup_status_lbl.setObjectName("infoMeta")
+        form.addRow("", self._startup_status_lbl)
+
         # ── Filename Template ─────────────────────────────────────────
         template_lbl = QLabel(tr("── Filename Template ──"))
         template_lbl.setObjectName("sectionLabel")
@@ -290,6 +306,14 @@ class SettingsDialog(QDialog):
         self._tray_check.setChecked(bool(self._config.get("minimize_to_tray")))
         self._tray_notify_check.setChecked(bool(self._config.get("tray_notifications")))
 
+        # Startup
+        from app.core.startup import is_registered
+        startup_on = bool(self._config.get("run_on_startup"))
+        self._startup_check.setChecked(startup_on)
+        self._startup_minimized_check.setChecked(bool(self._config.get("startup_minimized")))
+        self._startup_minimized_check.setEnabled(startup_on)
+        self._update_startup_status(is_registered())
+
         self._template_edit.setText(
             self._config.get("filename_template") or ""
         )
@@ -369,6 +393,20 @@ class SettingsDialog(QDialog):
             self._speed_spin.setRange(1.0, 999999.0)
             self._speed_spin.setValue(max(1.0, current * 1024.0))
 
+    def _on_startup_toggled(self, enabled: bool) -> None:
+        """Enable/disable the minimized sub-option based on the startup checkbox."""
+        self._startup_minimized_check.setEnabled(enabled)
+
+    def _update_startup_status(self, registered: bool) -> None:
+        """Refresh the startup status label."""
+        if registered:
+            self._startup_status_lbl.setText(tr("✔ Registered in startup"))
+            self._startup_status_lbl.setObjectName("urlValidValid")
+        else:
+            self._startup_status_lbl.setText(tr("✗ Not registered"))
+            self._startup_status_lbl.setObjectName("infoMeta")
+        self._startup_status_lbl.setStyleSheet("")
+
     def _on_browse(self) -> None:
         current = self._path_edit.text() or str(Path.home() / "Downloads")
         folder = QFileDialog.getExistingDirectory(
@@ -436,7 +474,20 @@ class SettingsDialog(QDialog):
             kbps = int(raw_value)
         self._config.set("speed_limit_kbps", max(1, kbps))
 
+        # Startup
+        startup_on = self._startup_check.isChecked()
+        startup_min = self._startup_minimized_check.isChecked()
+        self._config.set("run_on_startup", startup_on)
+        self._config.set("startup_minimized", startup_min)
+
         self._config.save()
+
+        # Apply startup registry change immediately
+        from app.core.startup import register, unregister
+        if startup_on:
+            register(minimized=startup_min)
+        else:
+            unregister()
 
         self.settings_changed.emit()
         if new_theme != old_theme:
