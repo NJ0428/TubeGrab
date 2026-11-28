@@ -654,3 +654,24 @@ QLineEdit#templateInput:focus {
     border-color: #0078d4;
     background-color: #ffffff;
 }
+
+/* ── Drop overlay ───────────────────────────────────────── */
+QWidget#dropOverlay {
+    background-color: rgba(0, 120, 212, 0.80);
+    border: 3px dashed #005a9e;
+    border-radius: 14px;
+}
+
+QLabel#dropOverlayIcon {
+    font-size: 52px;
+    background-color: transparent;
+    color: #ffffff;
+}
+
+QLabel#dropOverlayText {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: #ffffff;
+    background-color: transparent;
+}

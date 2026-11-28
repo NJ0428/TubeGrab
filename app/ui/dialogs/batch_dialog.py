@@ -193,6 +193,10 @@ class BatchDialog(QDialog):
 
         root.addLayout(btn_row)
 
+    def set_initial_text(self, text: str) -> None:
+        """Pre-populate the URL text editor (e.g. from a dropped .txt file)."""
+        self._text_edit.setPlainText(text)
+
     def _connect_signals(self) -> None:
         self._analyze_btn.clicked.connect(self._on_analyze)
         self._browse_btn.clicked.connect(self._on_browse)
