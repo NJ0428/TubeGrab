@@ -226,6 +226,13 @@ _KO: dict[str, str] = {
     "Download FFmpeg": "FFmpeg 다운로드",
     "Continue Anyway": "그냥 계속",
 
+    # ── Drag and drop ──────────────────────────────────────────────────────
+    "Drop to fetch video info": "드롭하여 영상 정보 가져오기",
+    "Drop .txt file for batch download": ".txt 파일을 드롭하여 일괄 다운로드",
+    "Only YouTube URLs or .txt files supported": "YouTube URL 또는 .txt 파일만 지원합니다",
+    "URL dropped: {}": "URL 드롭됨: {}",
+    "Could not read dropped file.": "드롭된 파일을 읽을 수 없습니다.",
+
     # ── After Download ─────────────────────────────────────────────────────
     "── After Download ──": "── 다운로드 후 작업 ──",
     "When a download finishes:": "다운로드 완료 시:",

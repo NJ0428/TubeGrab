@@ -131,6 +131,10 @@ class UrlInputWidget(QWidget):
         else:
             self._on_text_changed(self._url_edit.text())
 
+    def set_url(self, url: str) -> None:
+        """Set the URL text field (e.g. from a drag-and-drop operation)."""
+        self._url_edit.setText(url.strip())
+
     def current_url(self) -> str:
         """Return the current URL text."""
         return self._url_edit.text().strip()
